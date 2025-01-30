@@ -5,12 +5,22 @@ import subprocess
 from datetime import datetime
 import json
 from flask import Flask, render_template, request
+import argparse
 
 app = Flask(__name__)
 
+# 添加命令行参数解析
+def parse_args():
+    parser = argparse.ArgumentParser(description='照片位置热力图生成工具')
+    parser.add_argument('--skip-db', action='store_true', help='跳过数据库生成')
+    return parser.parse_args()
 
 # 初始化数据库
 def init_db():
+    if os.path.exists('geo_data.db'):
+        print("数据库已存在，跳过初始化。")
+        return
+
     conn = sqlite3.connect('geo_data.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS media
@@ -107,21 +117,21 @@ def get_data():
     c = conn.cursor()
 
     if start and end:
-        # 如果有时间范围参数，筛选数据
-        query = '''SELECT lat, lon FROM media
+        query = '''SELECT path, lat, lon, timestamp FROM media
                    WHERE timestamp BETWEEN ? AND ?'''
         params = (start, end)
     else:
-        # 如果没有时间范围参数，返回所有数据
-        query = 'SELECT lat, lon FROM media'
+        query = 'SELECT path, lat, lon, timestamp FROM media'
         params = ()
 
     c.execute(query, params)
-    points = [{'lat': row[0], 'lng': row[1]} for row in c.fetchall()]
+    points = [{
+        'path': row[0],
+        'lat': row[1],
+        'lng': row[2],
+        'timestamp': row[3]
+    } for row in c.fetchall()]
     conn.close()
-
-    # 调试输出
-    print(f"Query: start={start}, end={end}, points found: {len(points)}")
 
     return {'points': points}
 
@@ -132,14 +142,14 @@ def index():
 
 
 if __name__ == '__main__':
-    init_db()
+    args = parse_args()
 
-    # 使用线程池并行处理目录
-    with ThreadPoolExecutor(max_workers=4) as executor:  # 机械硬盘建议4线程
-        # 假设需要扫描的目录列表
-        directories = ['test', 'test2']
-        for directory in directories:
-            executor.submit(process_files, directory)
+    if not args.skip_db:
+        init_db()
+        # 多线程处理（SSD）
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            directories = [r'H:\Media\K20.Camera', r'H:\Media\K20.Camera.Raw', r'H:\Media\Apple\iPhone2022', r'H:\Media\Apple\iPhone2023A', r'H:\Media\Apple\iPhone2023B', r'H:\Media\Apple\iPhone2024A', r'H:\Media\Apple\iPhone2024B', r'H:\Media\Apple\iPhone2024C', r'H:\Media\Apple\iPhone2024D', r'H:\Media\Apple\iPhone2025A', r'H:\Media\GoPro', r'H:\Media\Apple\iPad', r'H:\Media\OtherDevices', r'H:\Private\Rec']
+            for directory in directories:
+                executor.submit(process_files, directory)
 
-    app.run(threaded=True)
-    app.run(debug=True)
+    app.run(threaded=True, debug=True)

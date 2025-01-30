@@ -4,14 +4,34 @@
     <title>照片位置热力图</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+        }
+
         #map {
-            height: 100vh; /* 确保地图容器有高度 */
-            width: 100%;   /* 确保地图容器有宽度 */
+            height: 100vh;
+            width: 75%; /* 地图占 75% 宽度 */
+        }
+
+        #sidebar {
+            width: 25%; /* 侧栏占 25% 宽度 */
+            padding: 20px;
+            background-color: #f4f4f4;
+            box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
         }
     </style>
 </head>
 <body>
     <div id="map"></div>
+    <div id="sidebar">
+        <h2>统计信息</h2>
+        <p>文件数量: <span id="file-count">0</span></p>
+        <p>时间范围: <span id="time-range">无</span></p>
+        <p>大致地点: <span id="location">无</span></p>
+    </div>
 
     <!-- Leaflet 核心库 -->
     <script src="{{ url_for('static', filename='js/leaflet.js') }}"></script>
@@ -21,27 +41,33 @@
     <script src="{{ url_for('static', filename='js/leaflet-heat.js') }}"></script>
 
     <script>
-        // 检查插件是否加载成功
-        if (typeof L.heatLayer === 'function') {
-            console.log('Leaflet.heat plugin is loaded successfully!');
-        } else {
-            console.error('Leaflet.heat plugin is NOT loaded!');
-        }
-
         // 初始化地图
         const map = L.map('map').setView([30, 120], 3);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
         let heatmapLayer = null;
 
+        // 更新侧栏信息
+        function updateSidebar(data) {
+            const fileCount = data.points.length;
+            const timestamps = data.points.map(p => new Date(p.timestamp).getTime());
+            const minTime = new Date(Math.min(...timestamps)).toLocaleString();
+            const maxTime = new Date(Math.max(...timestamps)).toLocaleString();
+            const locations = data.points.map(p => `${p.lat.toFixed(2)}, ${p.lng.toFixed(2)}`).join('; ');
+
+            document.getElementById('file-count').textContent = fileCount;
+            document.getElementById('time-range').textContent = `${minTime} - ${maxTime}`;
+            document.getElementById('location').textContent = locations;
+        }
+
         // 获取初始数据
         fetch('/data')
             .then(response => response.json())
             .then(data => {
                 console.log('Data received:', data);
-                const points = data.points.map(p => [p.lat, p.lng]);
-                console.log('Points:', points);
+                updateSidebar(data); // 更新侧栏信息
 
+                const points = data.points.map(p => [p.lat, p.lng]);
                 if (points.length === 0) {
                     console.warn('No points found!');
                     return;
@@ -52,22 +78,29 @@
                     map.removeLayer(heatmapLayer);
                 }
                 heatmapLayer = L.heatLayer(points, {
-                    radius: 25,      // 热点半径
-                    blur: 15,        // 模糊程度
-                    maxZoom: 17,     // 最大缩放级别
-                    minOpacity: 0.5, // 最小透明度
-                    gradient: {      // 颜色渐变
-                        0.4: 'blue',
-                        0.6: 'lime',
-                        0.8: 'yellow',
-                        1.0: 'red'
-                    }
+                    radius: 25,
+                    blur: 15,
+                    maxZoom: 17,
                 }).addTo(map);
+
+                // 添加悬停提示
+                data.points.forEach(point => {
+                    const marker = L.circleMarker([point.lat, point.lng], {
+                        radius: 5,
+                        color: 'red',
+                        fillOpacity: 0.5
+                    }).addTo(map);
+
+                    marker.bindPopup(`
+                        <b>文件路径:</b> ${point.path}<br>
+                        <b>拍摄时间:</b> ${point.timestamp}<br>
+                        <b>经纬度:</b> ${point.lat}, ${point.lng}
+                    `);
+                });
 
                 // 调整地图视野范围
                 const bounds = L.latLngBounds(points);
                 map.fitBounds(bounds);
-                console.log('Map bounds:', bounds);
             })
             .catch(error => console.error('Error:', error));
     </script>
