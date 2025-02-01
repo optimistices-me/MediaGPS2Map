@@ -36,18 +36,15 @@
 
     <!-- Leaflet 核心库 -->
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <!-- Leaflet.glify 插件 -->
-    <script src="https://unpkg.com/leaflet.glify@2.1.3/dist/leaflet.glify.min.js"></script>
-
-    <!-- Leaflet 核心库 -->
-    <script src="{{ url_for('static', filename='js/leaflet.js') }}"></script>
-    <!-- Leaflet.glify 插件 -->
-    <script src="{{ url_for('static', filename='js/glify-browser.js') }}"></script>
+    <!-- Leaflet.heat 插件 -->
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 
     <script>
         // 初始化地图
         const map = L.map('map').setView([30, 120], 3);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        let heatmapLayer = null;
 
         // 更新侧栏信息
         function updateSidebar(data) {
@@ -64,44 +61,83 @@
             sampleLocations.innerHTML = data.addresses.map(addr => `<li>${addr}</li>`).join('');
         }
 
-        // 获取初始数据
-        fetch('/data')
-            .then(response => response.json())
-            .then(data => {
-                console.log('Data received:', data);
-                updateSidebar(data); // 更新侧栏信息
+        // 获取当前地图区域的数据
+        function loadDataForBounds(bounds) {
+            const boundsStr = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
 
-                // 将数据转换为 Leaflet.glify 所需的格式
-                const points = data.points.map(p => [p.lat, p.lng]);
+            fetch(`/data?bounds=${boundsStr}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Data received:', data);
+                    updateSidebar(data); // 更新侧栏信息
 
-                // 使用 Leaflet.glify 渲染热图
-                L.glify.points({
-                    map: map,
-                    data: points,
-                    color: 'rgba(255, 0, 0, 0.5)', // 红色，50% 透明度
-                    size: 5,
-                    opacity: 0.8, // 整体透明度
-                    fillOpacity: 0.5 // 填充透明度
-                });
+                    // 将数据转换为 Leaflet.heat 所需的格式
+                    const points = data.points.map(p => [p.lat, p.lng, 1]); // 第三个参数是强度
 
-                // 添加点击事件
-                map.on('click', function (e) {
-                    const lat = e.latlng.lat;
-                    const lng = e.latlng.lng;
-                    fetch(`https://restapi.amap.com/v3/geocode/regeo?key=您的API_KEY&location=${lng},${lat}`)
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.status === '1' && data.regeocode) {
-                                const address = data.regeocode.formatted_address;
-                                L.popup()
-                                    .setLatLng(e.latlng)
-                                    .setContent(`<b>地址:</b> ${address}`)
-                                    .openOn(map);
-                            }
-                        });
-                });
-            })
-            .catch(error => console.error('Error:', error));
+                    // 使用 Leaflet.heat 渲染热图
+                    if (heatmapLayer) {
+                        map.removeLayer(heatmapLayer);
+                    }
+                    heatmapLayer = L.heatLayer(points, {
+                        radius: 10,
+                        blur: 5,
+                        maxZoom: 17,
+                        gradient: {
+                            0.4: 'rgba(0, 0, 255, 0.5)',
+                            0.6: 'rgba(0, 255, 0, 0.5)',
+                            0.8: 'rgba(255, 255, 0, 0.5)',
+                            1.0: 'rgba(255, 0, 0, 0.5)'
+                        }
+                    }).addTo(map);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // 监听地图移动事件
+        map.on('moveend', function () {
+            const bounds = map.getBounds();
+            loadDataForBounds(bounds);
+        });
+
+        // 初始化加载数据
+        const initialBounds = map.getBounds();
+        loadDataForBounds(initialBounds);
+
+        // 添加点击事件
+        map.on('click', function (e) {
+            const lat = e.latlng.lat;
+            const lng = e.latlng.lng;
+
+            // 找到最近的点
+            let closestPoint = null;
+            let minDistance = Infinity;
+            data.points.forEach(p => {
+                const distance = Math.sqrt(Math.pow(p.lat - lat, 2) + Math.pow(p.lng - lng, 2));
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    closestPoint = p;
+                }
+            });
+
+            if (closestPoint) {
+                // 获取地址
+                fetch(`https://restapi.amap.com/v3/geocode/regeo?key=8194eb1949ecf804aad037366e838ef1&location=${closestPoint.lng},${closestPoint.lat}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === '1' && data.regeocode) {
+                            const address = data.regeocode.formatted_address;
+                            L.popup()
+                                .setLatLng([closestPoint.lat, closestPoint.lng])
+                                .setContent(`
+                                    <b>文件路径:</b> ${closestPoint.path}<br>
+                                    <b>拍摄时间:</b> ${closestPoint.timestamp}<br>
+                                    <b>地址:</b> ${address}
+                                `)
+                                .openOn(map);
+                        }
+                    });
+            }
+        });
     </script>
 </body>
 </html>

@@ -6,6 +6,7 @@ import json
 from flask import Flask, render_template, request
 import argparse
 import requests
+import math
 
 app = Flask(__name__)
 
@@ -110,9 +111,42 @@ def process_batch(file_batch, conn):
     else:
         print("No valid records to insert")
 
+# WGS-84 转 GCJ-02
+def wgs84_to_gcj02(lat, lng):
+    a = 6378245.0  # 长半轴
+    ee = 0.00669342162296594323  # 扁率
+
+    def transform_lat(x, y):
+        ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * math.sqrt(abs(x))
+        ret += (20.0 * math.sin(6.0 * x * math.pi) + 20.0 * math.sin(2.0 * x * math.pi)) * 2.0 / 3.0
+        ret += (20.0 * math.sin(y * math.pi) + 40.0 * math.sin(y / 3.0 * math.pi)) * 2.0 / 3.0
+        ret += (160.0 * math.sin(y / 12.0 * math.pi) + 320 * math.sin(y * math.pi / 30.0)) * 2.0 / 3.0
+        return ret
+
+    def transform_lng(x, y):
+        ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * math.sqrt(abs(x))
+        ret += (20.0 * math.sin(6.0 * x * math.pi) + 20.0 * math.sin(2.0 * x * math.pi)) * 2.0 / 3.0
+        ret += (20.0 * math.sin(x * math.pi) + 40.0 * math.sin(x / 3.0 * math.pi)) * 2.0 / 3.0
+        ret += (150.0 * math.sin(x / 12.0 * math.pi) + 300.0 * math.sin(x / 30.0 * math.pi)) * 2.0 / 3.0
+        return ret
+
+    d_lat = transform_lat(lng - 105.0, lat - 35.0)
+    d_lng = transform_lng(lng - 105.0, lat - 35.0)
+    rad_lat = lat / 180.0 * math.pi
+    magic = math.sin(rad_lat)
+    magic = 1 - ee * magic * magic
+    sqrt_magic = math.sqrt(magic)
+    d_lat = (d_lat * 180.0) / ((a * (1 - ee)) / (magic * sqrt_magic) * math.pi)
+    d_lng = (d_lng * 180.0) / (a / sqrt_magic * math.cos(rad_lat) * math.pi)
+    gcj_lat = lat + d_lat
+    gcj_lng = lng + d_lng
+    return gcj_lat, gcj_lng
+
 # 获取地址信息
 def get_address(lat, lng):
-    url = f'https://restapi.amap.com/v3/geocode/regeo?key={AMAP_API_KEY}&location={lng},{lat}'
+    # 将 WGS-84 坐标转换为 GCJ-02 坐标
+    gcj_lat, gcj_lng = wgs84_to_gcj02(lat, lng)
+    url = f'https://restapi.amap.com/v3/geocode/regeo?key={AMAP_API_KEY}&location={gcj_lng},{gcj_lat}'
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
@@ -122,9 +156,20 @@ def get_address(lat, lng):
 
 @app.route('/data')
 def get_data():
+    bounds = request.args.get('bounds')  # 格式：'lat1,lng1,lat2,lng2'
     conn = sqlite3.connect('geo_data.db')
     c = conn.cursor()
-    c.execute('SELECT path, lat, lon, timestamp FROM media')
+
+    if bounds:
+        lat1, lng1, lat2, lng2 = map(float, bounds.split(','))
+        query = '''SELECT path, lat, lon, timestamp FROM media
+                   WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?'''
+        params = (min(lat1, lat2), max(lat1, lat2), min(lng1, lng2), max(lng1, lng2))
+    else:
+        query = 'SELECT path, lat, lon, timestamp FROM media'
+        params = ()
+
+    c.execute(query, params)
     points = [{
         'path': row[0],
         'lat': row[1],
@@ -133,8 +178,22 @@ def get_data():
     } for row in c.fetchall()]
     conn.close()
 
-    # 随机选取 5 个点获取地址
-    sample_points = points[:5]  # 仅取前 5 个点作为示例
+    # 将地图划分为 5 个区域，每个区域选取一个典型位置
+    regions = [
+        (20, 110, 30, 120),  # 区域 1
+        (30, 110, 40, 120),  # 区域 2
+        (40, 110, 50, 120),  # 区域 3
+        (20, 120, 30, 130),  # 区域 4
+        (30, 120, 40, 130)   # 区域 5
+    ]
+    sample_points = []
+    for region in regions:
+        lat_min, lng_min, lat_max, lng_max = region
+        points_in_region = [p for p in points if lat_min <= p['lat'] <= lat_max and lng_min <= p['lng'] <= lng_max]
+        if points_in_region:
+            sample_points.append(points_in_region[0])  # 选取第一个点作为典型位置
+
+    # 获取典型位置的地址
     addresses = [get_address(p['lat'], p['lng']) for p in sample_points]
 
     return {
