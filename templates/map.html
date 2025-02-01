@@ -30,22 +30,24 @@
         <h2>统计信息</h2>
         <p>文件数量: <span id="file-count">0</span></p>
         <p>时间范围: <span id="time-range">无</span></p>
-        <p>大致地点: <span id="location">无</span></p>
+        <p>典型位置:</p>
+        <ul id="sample-locations"></ul>
     </div>
 
     <!-- Leaflet 核心库 -->
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <!-- Leaflet.glify 插件 -->
+    <script src="https://unpkg.com/leaflet.glify@2.1.3/dist/leaflet.glify.min.js"></script>
+
+    <!-- Leaflet 核心库 -->
     <script src="{{ url_for('static', filename='js/leaflet.js') }}"></script>
-    <!-- heatmap.js 核心库 -->
-    <script src="{{ url_for('static', filename='js/heatmap.min.js') }}"></script>
-    <!-- Leaflet.heat 插件 -->
-    <script src="{{ url_for('static', filename='js/leaflet-heat.js') }}"></script>
+    <!-- Leaflet.glify 插件 -->
+    <script src="{{ url_for('static', filename='js/glify-browser.js') }}"></script>
 
     <script>
         // 初始化地图
         const map = L.map('map').setView([30, 120], 3);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
-        let heatmapLayer = null;
 
         // 更新侧栏信息
         function updateSidebar(data) {
@@ -53,11 +55,13 @@
             const timestamps = data.points.map(p => new Date(p.timestamp).getTime());
             const minTime = new Date(Math.min(...timestamps)).toLocaleString();
             const maxTime = new Date(Math.max(...timestamps)).toLocaleString();
-            const locations = data.points.map(p => `${p.lat.toFixed(2)}, ${p.lng.toFixed(2)}`).join('; ');
 
             document.getElementById('file-count').textContent = fileCount;
             document.getElementById('time-range').textContent = `${minTime} - ${maxTime}`;
-            document.getElementById('location').textContent = locations;
+
+            // 显示典型位置
+            const sampleLocations = document.getElementById('sample-locations');
+            sampleLocations.innerHTML = data.addresses.map(addr => `<li>${addr}</li>`).join('');
         }
 
         // 获取初始数据
@@ -67,40 +71,35 @@
                 console.log('Data received:', data);
                 updateSidebar(data); // 更新侧栏信息
 
+                // 将数据转换为 Leaflet.glify 所需的格式
                 const points = data.points.map(p => [p.lat, p.lng]);
-                if (points.length === 0) {
-                    console.warn('No points found!');
-                    return;
-                }
 
-                // 创建热图
-                if (heatmapLayer) {
-                    map.removeLayer(heatmapLayer);
-                }
-                heatmapLayer = L.heatLayer(points, {
-                    radius: 25,
-                    blur: 15,
-                    maxZoom: 17,
-                }).addTo(map);
-
-                // 添加悬停提示
-                data.points.forEach(point => {
-                    const marker = L.circleMarker([point.lat, point.lng], {
-                        radius: 5,
-                        color: 'red',
-                        fillOpacity: 0.5
-                    }).addTo(map);
-
-                    marker.bindPopup(`
-                        <b>文件路径:</b> ${point.path}<br>
-                        <b>拍摄时间:</b> ${point.timestamp}<br>
-                        <b>经纬度:</b> ${point.lat}, ${point.lng}
-                    `);
+                // 使用 Leaflet.glify 渲染热图
+                L.glify.points({
+                    map: map,
+                    data: points,
+                    color: 'rgba(255, 0, 0, 0.5)', // 红色，50% 透明度
+                    size: 5,
+                    opacity: 0.8, // 整体透明度
+                    fillOpacity: 0.5 // 填充透明度
                 });
 
-                // 调整地图视野范围
-                const bounds = L.latLngBounds(points);
-                map.fitBounds(bounds);
+                // 添加点击事件
+                map.on('click', function (e) {
+                    const lat = e.latlng.lat;
+                    const lng = e.latlng.lng;
+                    fetch(`https://restapi.amap.com/v3/geocode/regeo?key=您的API_KEY&location=${lng},${lat}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.status === '1' && data.regeocode) {
+                                const address = data.regeocode.formatted_address;
+                                L.popup()
+                                    .setLatLng(e.latlng)
+                                    .setContent(`<b>地址:</b> ${address}`)
+                                    .openOn(map);
+                            }
+                        });
+                });
             })
             .catch(error => console.error('Error:', error));
     </script>
