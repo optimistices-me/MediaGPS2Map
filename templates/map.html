@@ -40,6 +40,8 @@
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 
     <script>
+        let currentPoints = []; // 存储当前显示的点数据
+
         // 初始化地图
         const map = L.map('map').setView([30, 120], 3);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -54,21 +56,22 @@
             const maxTime = new Date(Math.max(...timestamps)).toLocaleString();
 
             document.getElementById('file-count').textContent = fileCount;
-            document.getElementById('time-range').textContent = `${minTime} - ${maxTime}`;
+            document.getElementById('time-range').textContent = ${minTime} - ${maxTime};
 
             // 显示典型位置
             const sampleLocations = document.getElementById('sample-locations');
-            sampleLocations.innerHTML = data.addresses.map(addr => `<li>${addr}</li>`).join('');
+            sampleLocations.innerHTML = data.addresses.map(addr => <li>${addr}</li>).join('');
         }
 
         // 获取当前地图区域的数据
         function loadDataForBounds(bounds) {
-            const boundsStr = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+            const boundsStr = ${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()};
 
-            fetch(`/data?bounds=${boundsStr}`)
+            fetch(/data?bounds=${boundsStr})
                 .then(response => response.json())
                 .then(data => {
                     console.log('Data received:', data);
+                    currentPoints = data.points; // 更新全局变量
                     updateSidebar(data); // 更新侧栏信息
 
                     // 将数据转换为 Leaflet.heat 所需的格式
@@ -79,14 +82,14 @@
                         map.removeLayer(heatmapLayer);
                     }
                     heatmapLayer = L.heatLayer(points, {
-                        radius: 10,
-                        blur: 5,
-                        maxZoom: 17,
-                        gradient: {
-                            0.4: 'rgba(0, 0, 255, 0.5)',
-                            0.6: 'rgba(0, 255, 0, 0.5)',
-                            0.8: 'rgba(255, 255, 0, 0.5)',
-                            1.0: 'rgba(255, 0, 0, 0.5)'
+                        radius: 4,          // 点的基础半径（单位：像素）
+                        blur: 2,            // 模糊程度（0 表示无光晕）
+                        maxZoom: 18,        // 最大缩放级别后停止渲染
+                        minOpacity: 0.4,    // 最小透明度（整体透明度）
+                        gradient: {         // 颜色梯度配置
+                          0.1: 'rgba(0, 0, 255, 0.9)',  // 低密度区域颜色
+                          0.5: 'rgba(255, 255, 0, 0.6)',
+                          1.0: 'rgba(255, 0, 0, 0.2)'   // 高密度区域颜色
                         }
                     }).addTo(map);
                 })
@@ -103,15 +106,45 @@
         const initialBounds = map.getBounds();
         loadDataForBounds(initialBounds);
 
-        // 添加点击事件
+        // 添加坐标转换函数
+        function wgs84ToGcj02(lat, lng) {
+            const a = 6378245.0;
+            const ee = 0.00669342162296594323;
+
+            function transformLat(x, y) {
+                let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+                ret += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
+                ret += (20.0 * Math.sin(y * Math.PI) + 40.0 * Math.sin(y / 3.0 * Math.PI)) * 2.0 / 3.0;
+                ret += (160.0 * Math.sin(y / 12.0 * Math.PI) + 320 * Math.sin(y * Math.PI / 30.0)) * 2.0 / 3.0;
+                return ret;
+            }
+
+            function transformLng(x, y) {
+                let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+                ret += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
+                ret += (20.0 * Math.sin(x * Math.PI) + 40.0 * Math.sin(x / 3.0 * Math.PI)) * 2.0 / 3.0;
+                ret += (150.0 * Math.sin(x / 12.0 * Math.PI) + 300.0 * Math.sin(x / 30.0 * Math.PI)) * 2.0 / 3.0;
+                return ret;
+            }
+
+            const dLat = transformLat(lng - 105.0, lat - 35.0);
+            const dLng = transformLng(lng - 105.0, lat - 35.0);
+            const radLat = lat / 180.0 * Math.PI;
+            const magic = Math.sin(radLat);
+            const sqrtMagic = Math.sqrt(1 - ee * magic * magic);
+            const dLatFinal = (dLat * 180.0) / ((a * (1 - ee)) / (sqrtMagic ** 3) * Math.PI);
+            const dLngFinal = (dLng * 180.0) / (a / sqrtMagic * Math.cos(radLat) * Math.PI);
+            return [lat + dLatFinal, lng + dLngFinal];
+        }
+
+        // 修改点击事件处理
         map.on('click', function (e) {
             const lat = e.latlng.lat;
             const lng = e.latlng.lng;
 
-            // 找到最近的点
             let closestPoint = null;
             let minDistance = Infinity;
-            data.points.forEach(p => {
+            currentPoints.forEach(p => {
                 const distance = Math.sqrt(Math.pow(p.lat - lat, 2) + Math.pow(p.lng - lng, 2));
                 if (distance < minDistance) {
                     minDistance = distance;
@@ -120,22 +153,26 @@
             });
 
             if (closestPoint) {
-                // 获取地址
-                fetch(`https://restapi.amap.com/v3/geocode/regeo?key=8194eb1949ecf804aad037366e838ef1&location=${closestPoint.lng},${closestPoint.lat}`)
+                // 转换坐标
+                const [gcjLat, gcjLng] = wgs84ToGcj02(closestPoint.lat, closestPoint.lng);
+
+                // 请求地址信息
+                fetch(https://restapi.amap.com/v3/geocode/regeo?key=8194eb1949ecf804aad037366e838ef1&location=${gcjLng},${gcjLat})
                     .then(response => response.json())
                     .then(data => {
                         if (data.status === '1' && data.regeocode) {
                             const address = data.regeocode.formatted_address;
                             L.popup()
                                 .setLatLng([closestPoint.lat, closestPoint.lng])
-                                .setContent(`
+                                .setContent(
                                     <b>文件路径:</b> ${closestPoint.path}<br>
                                     <b>拍摄时间:</b> ${closestPoint.timestamp}<br>
                                     <b>地址:</b> ${address}
-                                `)
+                                )
                                 .openOn(map);
                         }
-                    });
+                    })
+                    .catch(error => console.error('地址请求失败:', error));
             }
         });
     </script>

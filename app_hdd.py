@@ -15,7 +15,7 @@ AMAP_API_KEY = '8194eb1949ecf804aad037366e838ef1'
 
 # 添加命令行参数解析
 def parse_args():
-    parser = argparse.ArgumentParser(description='照片位置热力图生成工具')
+    parser = argparse.ArgumentParser(description='照片位置热图生成工具')
     parser.add_argument('--skip-db', action='store_true', help='跳过数据库生成')
     return parser.parse_args()
 
@@ -49,7 +49,7 @@ def extract_metadata_batch(file_batch):
     result = subprocess.run(cmd, capture_output=True, text=True)
     return json.loads(result.stdout)
 
-def process_files(root_dir, batch_size=500):  # 增加批次大小
+def process_files(root_dir, batch_size=200):  # 批次大小根据硬盘能力和文件路径长度权衡设置
     conn = sqlite3.connect('geo_data.db')
     c = conn.cursor()
 
