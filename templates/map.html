@@ -134,6 +134,12 @@
                             1.0: 'rgba(255, 0, 0, 0.2)'   // 高密度区域颜色
                         }
                     }).addTo(map);
+
+                    // 为热力图的 canvas 元素设置 willReadFrequently 属性
+                    const canvas = heatmapLayer._canvas;
+                    if (canvas) {
+                        canvas.willReadFrequently = true;
+                    }
                 })
                 .catch(error => console.error('Error:', error));
         }
