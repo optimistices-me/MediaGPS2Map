@@ -28,17 +28,17 @@
 ### 安装步骤
 
 1. 克隆仓库：
-bash
+```bash
 git clone https://github.com/optimistices-me/MediaGPS2Map.git
 cd MediaGPS2Map
-
+```
 2. 安装依赖：
-bash
+```bash
 pip install flask requests
-
+```
 3. 配置config.json：
 
-json
+```json
 {
     "AMAP_API_KEY": "您的高德API密钥",
     "directories": [
@@ -47,18 +47,18 @@ json
     ],
     "batch_size": 200
 }
-
+```
 ### 运行程序
 1. 初始化数据库（首次运行）：
 
-bash
+```bash
 python app_hdd.py
-
+```
 2. 启动服务（后续运行可加--skip-db跳过数据库初始化）：
 
-bash
+```bash
 python app_hdd.py --skip-db
-
+```
 3. 访问网页： 
 
 打开浏览器访问 http://localhost:5000
