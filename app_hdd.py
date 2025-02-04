@@ -8,16 +8,32 @@ import argparse
 import requests
 import math
 
+
+# 加载配置文件并处理路径
+def load_config(config_file='config.json'):
+    with open(config_file, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+
+    # 处理目录路径中的反斜杠
+    config['directories'] = [directory.replace('\\', '/') for directory in config['directories']]
+    return config
+
+
+config = load_config()
+
+AMAP_API_KEY = config['AMAP_API_KEY']
+directories = config['directories']
+batch_size = config['batch_size']
+
 app = Flask(__name__)
 
-# 高德地图 API Key
-AMAP_API_KEY = '8194eb1949ecf804aad037366e838ef1'
 
 # 添加命令行参数解析
 def parse_args():
     parser = argparse.ArgumentParser(description='照片位置热图生成工具')
     parser.add_argument('--skip-db', action='store_true', help='跳过数据库生成')
     return parser.parse_args()
+
 
 # 初始化数据库
 def init_db():
@@ -40,6 +56,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 # 使用exiftool批量提取元数据
 def extract_metadata_batch(file_batch):
     cmd = ['exiftool', '-json', '-n', '-q',
@@ -49,7 +66,8 @@ def extract_metadata_batch(file_batch):
     result = subprocess.run(cmd, capture_output=True, text=True)
     return json.loads(result.stdout)
 
-def process_files(root_dir, batch_size=200):  # 批次大小根据硬盘能力和文件路径长度权衡设置
+
+def process_files(root_dir, batch_size=batch_size):  # 批次大小根据硬盘能力和文件路径长度权衡设置
     conn = sqlite3.connect('geo_data.db')
     c = conn.cursor()
 
@@ -75,6 +93,7 @@ def process_files(root_dir, batch_size=200):  # 批次大小根据硬盘能力�
 
     conn.close()
 
+
 def process_batch(file_batch, conn):
     metadata = extract_metadata_batch(file_batch)
     c = conn.cursor()
@@ -91,25 +110,19 @@ def process_batch(file_batch, conn):
         if all(gps) and date_str:
             try:
                 dt = datetime.strptime(date_str[:19], '%Y:%m:%d %H:%M:%S')
-                insert_data.append((
-                    path,
-                    float(gps[0]),
-                    float(gps[1]),
-                    dt.isoformat(),
-                    os.path.getmtime(path)
-                ))
+                insert_data.append((path, float(gps[0]), float(gps[1]), dt.isoformat(), os.path.getmtime(path)))
             except (ValueError, TypeError) as e:
                 print(f"Error processing {path}: {e}")
         else:
             print(f"No GPS data found in {path}")
 
     if insert_data:
-        c.executemany('''REPLACE INTO media
-                         VALUES (?,?,?,?,?)''', insert_data)
+        c.executemany('''REPLACE INTO media VALUES (?,?,?,?,?)''', insert_data)
         conn.commit()
         print(f"Inserted {len(insert_data)} records")
     else:
         print("No valid records to insert")
+
 
 # WGS-84 转 GCJ-02
 def wgs84_to_gcj02(lat, lng):
@@ -142,6 +155,7 @@ def wgs84_to_gcj02(lat, lng):
     gcj_lng = lng + d_lng
     return gcj_lat, gcj_lng
 
+
 # 获取地址信息
 def get_address(lat, lng):
     # 将 WGS-84 坐标转换为 GCJ-02 坐标
@@ -153,6 +167,7 @@ def get_address(lat, lng):
         if data['status'] == '1' and data['regeocode']:
             return data['regeocode']['formatted_address']
     return '未知地址'
+
 
 @app.route('/data')
 def get_data():
@@ -184,7 +199,7 @@ def get_data():
         (30, 110, 40, 120),  # 区域 2
         (40, 110, 50, 120),  # 区域 3
         (20, 120, 30, 130),  # 区域 4
-        (30, 120, 40, 130)   # 区域 5
+        (30, 120, 40, 130)  # 区域 5
     ]
     sample_points = []
     for region in regions:
@@ -201,9 +216,11 @@ def get_data():
         'addresses': addresses
     }
 
+
 @app.route('/')
 def index():
     return render_template('map.html')
+
 
 if __name__ == '__main__':
     args = parse_args()
@@ -211,15 +228,6 @@ if __name__ == '__main__':
     if not args.skip_db:
         init_db()
         # 单线程顺序处理
-        directories = [
-            r'H:\Media\K20.Camera', r'H:\Media\K20.Camera.Raw',
-            r'H:\Media\Apple\iPhone2022', r'H:\Media\Apple\iPhone2023A',
-            r'H:\Media\Apple\iPhone2023B', r'H:\Media\Apple\iPhone2024A',
-            r'H:\Media\Apple\iPhone2024B', r'H:\Media\Apple\iPhone2024C',
-            r'H:\Media\Apple\iPhone2024D', r'H:\Media\Apple\iPhone2025A',
-            r'H:\Media\GoPro', r'H:\Media\Apple\iPad',
-            r'H:\Media\OtherDevices', r'H:\Private\Rec'
-        ]
         for directory in directories:
             process_files(directory)
 
