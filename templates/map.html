@@ -41,65 +41,115 @@
 
     <script>
         let currentPoints = []; // 存储当前显示的点数据
+        let heatmapLayer = null; // 热力图层
 
         // 初始化地图
         const map = L.map('map').setView([30, 120], 3);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        let heatmapLayer = null;
-
         // 更新侧栏信息
+        let updateSidebarTimeout = null;
         function updateSidebar(data) {
-            const fileCount = data.points.length;
-            const timestamps = data.points.map(p => new Date(p.timestamp).getTime());
-            const minTime = new Date(Math.min(...timestamps)).toLocaleString();
-            const maxTime = new Date(Math.max(...timestamps)).toLocaleString();
+            if (updateSidebarTimeout) {
+                clearTimeout(updateSidebarTimeout);
+            }
 
-            document.getElementById('file-count').textContent = fileCount;
-            document.getElementById('time-range').textContent = ${minTime} - ${maxTime};
+            updateSidebarTimeout = setTimeout(() => {
+                const fileCount = data.points.length;
+                // 将所有时间戳提取出来
+                const timestamps = data.points.map(p => new Date(p.timestamp).getTime());
 
-            // 显示典型位置
-            const sampleLocations = document.getElementById('sample-locations');
-            sampleLocations.innerHTML = data.addresses.map(addr => <li>${addr}</li>).join('');
+                // 使用循环计算最小和最大时间戳，避免使用扩展运算符
+                let minTimestamp = Infinity;
+                let maxTimestamp = -Infinity;
+                for (let t of timestamps) {
+                    if (t < minTimestamp) minTimestamp = t;
+                    if (t > maxTimestamp) maxTimestamp = t;
+                }
+                const minTime = new Date(minTimestamp).toLocaleString();
+                const maxTime = new Date(maxTimestamp).toLocaleString();
+
+                document.getElementById('file-count').textContent = fileCount;
+                document.getElementById('time-range').textContent = `${minTime} - ${maxTime}`;
+
+                // 显示典型位置
+                const sampleLocations = document.getElementById('sample-locations');
+                sampleLocations.innerHTML = data.addresses.map(addr => `<li>${addr}</li>`).join('');
+            }, 300);  // 延迟 300ms 后执行
+        }
+
+        // 聚合数据函数
+        function aggregatePoints(points, gridSize) {
+            const aggregated = {};
+            points.forEach(point => {
+                const latKey = Math.floor(point.lat / gridSize) * gridSize;
+                const lngKey = Math.floor(point.lng / gridSize) * gridSize;
+                const key = `${latKey},${lngKey}`;
+
+                if (!aggregated[key]) {
+                    aggregated[key] = { lat: point.lat, lng: point.lng, count: 0 };
+                }
+                aggregated[key].count++;
+            });
+            return Object.values(aggregated); // 返回聚合后的数据
         }
 
         // 获取当前地图区域的数据
         function loadDataForBounds(bounds) {
-            const boundsStr = ${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()};
+            const boundsStr = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
+            const zoomLevel = map.getZoom();
 
-            fetch(/data?bounds=${boundsStr})
+            fetch(`/data?bounds=${boundsStr}`)
                 .then(response => response.json())
                 .then(data => {
                     console.log('Data received:', data);
-                    currentPoints = data.points; // 更新全局变量
-                    updateSidebar(data); // 更新侧栏信息
+                    currentPoints = data.points;
+                    updateSidebar(data);
 
-                    // 将数据转换为 Leaflet.heat 所需的格式
-                    const points = data.points.map(p => [p.lat, p.lng, 1]); // 第三个参数是强度
+                    let points = [];
+                    if (zoomLevel < 5) {
+                        // 当缩放级别小于14时，使用聚合数据
+                        console.log('Aggregating points...');
+                        points = aggregatePoints(data.points, 0.1);  // 聚合大小可以根据需要调整
+                        console.log('Aggregated points count:', points.length); // 查看聚合后点的数量
+                    } else {
+                        // 当缩放级别大于等于14时，直接使用原始数据
+                        points = data.points.map(p => [p.lat, p.lng, 1]);
+                    }
 
-                    // 使用 Leaflet.heat 渲染热图
+                    // 清除之前的热力图层
                     if (heatmapLayer) {
                         map.removeLayer(heatmapLayer);
                     }
+
+                    // 创建新的热力图层
                     heatmapLayer = L.heatLayer(points, {
                         radius: 4,          // 点的基础半径（单位：像素）
                         blur: 2,            // 模糊程度（0 表示无光晕）
                         maxZoom: 18,        // 最大缩放级别后停止渲染
                         minOpacity: 0.4,    // 最小透明度（整体透明度）
                         gradient: {         // 颜色梯度配置
-                          0.1: 'rgba(0, 0, 255, 0.9)',  // 低密度区域颜色
-                          0.5: 'rgba(255, 255, 0, 0.6)',
-                          1.0: 'rgba(255, 0, 0, 0.2)'   // 高密度区域颜色
+                            0.1: 'rgba(0, 0, 255, 0.9)',  // 低密度区域颜色
+                            0.5: 'rgba(255, 255, 0, 0.6)',
+                            1.0: 'rgba(255, 0, 0, 0.2)'   // 高密度区域颜色
                         }
                     }).addTo(map);
                 })
                 .catch(error => console.error('Error:', error));
         }
 
+        let debounceTimeout = null;
+
         // 监听地图移动事件
         map.on('moveend', function () {
-            const bounds = map.getBounds();
-            loadDataForBounds(bounds);
+            if (debounceTimeout) {
+                clearTimeout(debounceTimeout);
+            }
+
+            debounceTimeout = setTimeout(() => {
+                const bounds = map.getBounds();
+                loadDataForBounds(bounds);
+            }, 200); // 延迟 200 毫秒触发
         });
 
         // 初始化加载数据
@@ -153,22 +203,19 @@
             });
 
             if (closestPoint) {
-                // 转换坐标
                 const [gcjLat, gcjLng] = wgs84ToGcj02(closestPoint.lat, closestPoint.lng);
-
-                // 请求地址信息
-                fetch(https://restapi.amap.com/v3/geocode/regeo?key=8194eb1949ecf804aad037366e838ef1&location=${gcjLng},${gcjLat})
+                fetch(`https://restapi.amap.com/v3/geocode/regeo?key=8194eb1949ecf804aad037366e838ef1&location=${gcjLng},${gcjLat}`)
                     .then(response => response.json())
                     .then(data => {
                         if (data.status === '1' && data.regeocode) {
                             const address = data.regeocode.formatted_address;
                             L.popup()
                                 .setLatLng([closestPoint.lat, closestPoint.lng])
-                                .setContent(
+                                .setContent(`
                                     <b>文件路径:</b> ${closestPoint.path}<br>
                                     <b>拍摄时间:</b> ${closestPoint.timestamp}<br>
                                     <b>地址:</b> ${address}
-                                )
+                                `)
                                 .openOn(map);
                         }
                     })
