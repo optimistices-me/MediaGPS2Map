@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>照片位置热力图</title>
+    <title>照片位置热图</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <style>
         body {
@@ -490,7 +490,7 @@
         document.getElementById('midOpacity').addEventListener('input', updateHeatmap);
         document.getElementById('highOpacity').addEventListener('input', updateHeatmap);
 
-        // 更新热力图
+        // 更新热图
         function updateHeatmap() {
             currentHeatmapParams = {
                 radius: parseInt(document.getElementById('radius').value),
@@ -506,7 +506,7 @@
             updateHeatmapWithCurrentParams();
         }
 
-        // 从输入框更新热力图
+        // 从输入框更新热图
         function updateHeatmapFromInput(event) {
             const id = event.target.id;
             const value = event.target.value;
@@ -519,7 +519,7 @@
                 document.getElementById('minOpacity').value = value;
             }
 
-            updateHeatmap(); // 更新热力图
+            updateHeatmap(); // 更新热图
         }
 
         // 十六进制颜色转换为RGB格式
