@@ -142,6 +142,7 @@
                 <input type="datetime-local" id="start-time" />
                 <input type="datetime-local" id="end-time" />
             </div>
+            <button class="reset-button" id="reset-time">重置起止时间</button>
         </div>
 
         <div id="controls">
@@ -217,6 +218,9 @@
         const handleEnd = document.getElementById('timeline-handle-end');
 
         // 初始化时间范围
+        let initialStartTime = null;
+        let initialEndTime = null;
+
         function initTimeRange() {
             const timestamps = currentPoints.map(p => new Date(p.timestamp).getTime());
             // 使用循环计算最小和最大时间戳，避免使用扩展运算符
@@ -233,11 +237,14 @@
             document.getElementById('end-time').min = new Date(minTimestamp).toISOString().slice(0,16);
             document.getElementById('end-time').max = new Date(maxTimestamp).toISOString().slice(0,16);
 
+            // 保存初始时间区间
+            initialStartTime = minTimestamp;
+            initialEndTime = maxTimestamp;
+
             // 默认值设置为最小时间和最大时间
             document.getElementById('start-time').value = new Date(minTimestamp).toISOString().slice(0,16);
             document.getElementById('end-time').value = new Date(maxTimestamp).toISOString().slice(0,16);
 
-            // 固定全局的时间范围
             startTime = minTimestamp;
             endTime = maxTimestamp;
 
@@ -248,6 +255,25 @@
             handleStart.style.left = `${startPercent}%`;
             handleEnd.style.left = `${endPercent}%`;
         }
+
+        // 重置时间按钮功能
+        document.getElementById('reset-time').addEventListener('click', () => {
+            // 重置时间输入框到初始值
+            document.getElementById('start-time').value = new Date(initialStartTime).toISOString().slice(0,16);
+            document.getElementById('end-time').value = new Date(initialEndTime).toISOString().slice(0,16);
+
+            // 重置时间条端点回初始值
+            const startPercent = (initialStartTime - initialStartTime) / (initialEndTime - initialStartTime) * 100;
+            const endPercent = (initialEndTime - initialStartTime) / (initialEndTime - initialStartTime) * 100;
+            handleStart.style.left = `${startPercent}%`;
+            handleEnd.style.left = `${endPercent}%`;
+
+            // 更新全局时间
+            startTime = initialStartTime;
+            endTime = initialEndTime;
+
+            updateTimeRange(); // 更新数据
+        });
 
         // 更新侧栏信息
         let updateSidebarTimeout = null;
@@ -279,7 +305,6 @@
                 sampleLocations.innerHTML = data.addresses.map(addr => `<li>${addr}</li>`).join('');
             }, 300);  // 延迟 300ms 后执行
         }
-
 
         // 拖动事件处理
         timelineContainer.addEventListener('mousedown', (e) => {
@@ -313,6 +338,7 @@
                 }
             }
         });
+
 
         document.addEventListener('mouseup', () => {
             isDragging = false;
@@ -362,7 +388,7 @@
         }
 
         // 获取当前地图区域的数据
-        function loadDataForBounds(bounds) {
+        function loadDataForBounds(bounds, updateTimeRange = true) {
             const params = new URLSearchParams({
                 bounds: `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`,
                 start: document.getElementById('start-time').value,
@@ -373,7 +399,9 @@
                 .then(response => response.json())
                 .then(data => {
                     currentPoints = data.points;
-                    initTimeRange(); // 初始化时间范围
+                    if (updateTimeRange) {
+                        initTimeRange(); // 初始化时间范围，只有在数据加载后触发
+                    }
                     updateHeatmapWithCurrentParams(); // 使用当前参数更新热图
                     updateSidebar(data);
                 });
@@ -403,7 +431,8 @@
 
             debounceTimeout = setTimeout(() => {
                 const bounds = map.getBounds();
-                loadDataForBounds(bounds);
+                // 确保缩放时不会触发时间范围的更新
+                loadDataForBounds(bounds, false);  // 传递一个标志位，避免时间范围更新
             }, 200); // 延迟 200 毫秒触发
         });
 
