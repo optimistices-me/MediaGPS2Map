@@ -77,6 +77,47 @@
             width: 60px; /* 输入框宽度，适合显示4个字符 */
             margin-left: 10px;
         }
+
+        /* 时间筛选样式 */
+        #time-filter {
+            margin: 20px 0;
+        }
+        #timeline-container {
+            position: relative;
+            height: 40px;
+            margin: 20px 0;
+        }
+        #timeline {
+            width: 100%;
+            height: 5px;
+            background: #ddd;
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+        #timeline-handle-start,
+        #timeline-handle-end {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #007bff;
+            border-radius: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+        }
+        #timeline-handle-start { left: 0; }
+        #timeline-handle-end { left: 100%; }
+        .time-input {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+        .time-input input {
+            width: 45%;
+            padding: 5px;
+        }
+
     </style>
 </head>
 <body>
@@ -88,6 +129,19 @@
             <p>时间范围: <span id="time-range">无</span></p>
             <p>典型位置:</p>
             <ul id="sample-locations"></ul>
+        </div>
+
+        <div id="time-filter">
+            <h3>时间范围筛选</h3>
+            <div id="timeline-container">
+                <div id="timeline"></div>
+                <div id="timeline-handle-start"></div>
+                <div id="timeline-handle-end"></div>
+            </div>
+            <div class="time-input">
+                <input type="datetime-local" id="start-time" />
+                <input type="datetime-local" id="end-time" />
+            </div>
         </div>
 
         <div id="controls">
@@ -136,12 +190,64 @@
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 
     <script>
-        let currentPoints = []; // 存储当前显示的点数据
-        let heatmapLayer = null; // 热力图层
-
-        // 初始化地图
+        let currentPoints = [];
+        let heatmapLayer = null;
         const map = L.map('map').setView([30, 120], 3);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        let currentHeatmapParams = {
+            radius: 4,
+            blur: 2,
+            minOpacity: 0.4,
+            gradient: {
+                0.1: 'rgba(0, 0, 255, 0.9)',
+                0.5: 'rgba(255, 255, 0, 0.6)',
+                1.0: 'rgba(255, 0, 0, 0.2)'
+            }
+        };
+
+        // 初始化时间范围
+        let startTime = null;
+        let endTime = null;
+        let isDragging = false;
+        let currentHandle = null;
+        const timelineContainer = document.getElementById('timeline-container');
+        const timeline = document.getElementById('timeline');
+        const handleStart = document.getElementById('timeline-handle-start');
+        const handleEnd = document.getElementById('timeline-handle-end');
+
+        // 初始化时间范围
+        function initTimeRange() {
+            const timestamps = currentPoints.map(p => new Date(p.timestamp).getTime());
+            // 使用循环计算最小和最大时间戳，避免使用扩展运算符
+            let minTimestamp = Infinity;
+            let maxTimestamp = -Infinity;
+            for (let t of timestamps) {
+                if (t < minTimestamp) minTimestamp = t;
+                if (t > maxTimestamp) maxTimestamp = t;
+            }
+
+            // 设置时间范围的最小值和最大值
+            document.getElementById('start-time').min = new Date(minTimestamp).toISOString().slice(0,16);
+            document.getElementById('start-time').max = new Date(maxTimestamp).toISOString().slice(0,16);
+            document.getElementById('end-time').min = new Date(minTimestamp).toISOString().slice(0,16);
+            document.getElementById('end-time').max = new Date(maxTimestamp).toISOString().slice(0,16);
+
+            // 默认值设置为最小时间和最大时间
+            document.getElementById('start-time').value = new Date(minTimestamp).toISOString().slice(0,16);
+            document.getElementById('end-time').value = new Date(maxTimestamp).toISOString().slice(0,16);
+
+            // 固定全局的时间范围
+            startTime = minTimestamp;
+            endTime = maxTimestamp;
+
+            // 设置时间轴的范围
+            const timelineWidth = timeline.offsetWidth;
+            const startPercent = (minTimestamp - minTimestamp) / (maxTimestamp - minTimestamp) * 100;
+            const endPercent = (maxTimestamp - minTimestamp) / (maxTimestamp - minTimestamp) * 100;
+            handleStart.style.left = `${startPercent}%`;
+            handleEnd.style.left = `${endPercent}%`;
+        }
 
         // 更新侧栏信息
         let updateSidebarTimeout = null;
@@ -174,6 +280,71 @@
             }, 300);  // 延迟 300ms 后执行
         }
 
+
+        // 拖动事件处理
+        timelineContainer.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            const rect = timeline.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const percent = clickX / rect.width;
+
+            if (Math.abs(percent * 100 - parseFloat(handleStart.style.left)) < 10) {
+                currentHandle = handleStart;
+            } else if (Math.abs(percent * 100 - parseFloat(handleEnd.style.left)) < 10) {
+                currentHandle = handleEnd;
+            }
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging && currentHandle) {
+                const rect = timeline.getBoundingClientRect();
+                const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+                const percent = (x / rect.width) * 100;
+
+                currentHandle.style.left = `${percent}%`;
+                const currentTime = startTime + (percent / 100) * (endTime - startTime);
+
+                if (currentHandle === handleStart) {
+                    const newStartTime = new Date(currentTime);
+                    document.getElementById('start-time').value = newStartTime.toISOString().slice(0, 16);
+                } else {
+                    const newEndTime = new Date(currentTime);
+                    document.getElementById('end-time').value = newEndTime.toISOString().slice(0, 16);
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            currentHandle = null;
+            updateTimeRange();
+        });
+
+        // 输入框变化监听
+        document.getElementById('start-time').addEventListener('change', updateTimeRange);
+        document.getElementById('end-time').addEventListener('change', updateTimeRange);
+
+        // 更新时间处理函数
+        function updateTimeRange() {
+            const bounds = map.getBounds();
+            const start = document.getElementById('start-time').value;
+            const end = document.getElementById('end-time').value;
+
+            const params = new URLSearchParams({
+                bounds: `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`,
+                start: start ? new Date(start).toISOString() : '',
+                end: end ? new Date(end).toISOString() : ''
+            });
+
+            fetch(`/data?${params}`)
+                .then(response => response.json())
+                .then(data => {
+                    currentPoints = data.points;
+                    updateHeatmapWithCurrentParams(); // 使用当前参数更新热图
+                    updateSidebar(data);
+                });
+        }
+
         // 聚合数据函数
         function aggregatePoints(points, gridSize) {
             const aggregated = {};
@@ -192,52 +363,34 @@
 
         // 获取当前地图区域的数据
         function loadDataForBounds(bounds) {
-            const boundsStr = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
-            const zoomLevel = map.getZoom();
+            const params = new URLSearchParams({
+                bounds: `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`,
+                start: document.getElementById('start-time').value,
+                end: document.getElementById('end-time').value
+            });
 
-            fetch(`/data?bounds=${boundsStr}`)
+            fetch(`/data?${params}`)
                 .then(response => response.json())
                 .then(data => {
-                    console.log('Data received:', data);
                     currentPoints = data.points;
+                    initTimeRange(); // 初始化时间范围
+                    updateHeatmapWithCurrentParams(); // 使用当前参数更新热图
                     updateSidebar(data);
+                });
+        }
 
-                    let points = [];
-                    if (zoomLevel < 5) {
-                        // 当缩放级别小于14时，使用聚合数据
-                        console.log('Aggregating points...');
-                        points = aggregatePoints(data.points, 0.1);  // 聚合大小可以根据需要调整
-                        console.log('Aggregated points count:', points.length); // 查看聚合后点的数量
-                    } else {
-                        // 当缩放级别大于等于14时，直接使用原始数据
-                        points = data.points.map(p => [p.lat, p.lng, 1]);
-                    }
+        function updateHeatmapWithCurrentParams() {
+            if (heatmapLayer) {
+                map.removeLayer(heatmapLayer);
+            }
 
-                    // 清除之前的热力图层
-                    if (heatmapLayer) {
-                        map.removeLayer(heatmapLayer);
-                    }
-
-                    // 创建新的热力图层
-                    heatmapLayer = L.heatLayer(points, {
-                        radius: 4,          // 点的基础半径（单位：像素）
-                        blur: 2,            // 模糊程度（0 表示无光晕）
-                        maxZoom: 18,        // 最大缩放级别后停止渲染
-                        minOpacity: 0.4,    // 最小透明度（整体透明度）
-                        gradient: {         // 颜色梯度配置
-                            0.1: 'rgba(0, 0, 255, 0.9)',  // 低密度区域颜色
-                            0.5: 'rgba(255, 255, 0, 0.6)',
-                            1.0: 'rgba(255, 0, 0, 0.2)'   // 高密度区域颜色
-                        }
-                    }).addTo(map);
-
-                    // 为热力图的 canvas 元素设置 willReadFrequently 属性
-                    const canvas = heatmapLayer._canvas;
-                    if (canvas) {
-                        canvas.willReadFrequently = true;
-                    }
-                })
-                .catch(error => console.error('Error:', error));
+            const points = currentPoints.map(p => [p.lat, p.lng, 1]);
+            heatmapLayer = L.heatLayer(points, {
+                radius: currentHeatmapParams.radius,
+                blur: currentHeatmapParams.blur,
+                minOpacity: currentHeatmapParams.minOpacity,
+                gradient: currentHeatmapParams.gradient
+            }).addTo(map);
         }
 
         let debounceTimeout = null;
@@ -310,37 +463,18 @@
 
         // 更新热力图
         function updateHeatmap() {
-            const radius = parseInt(document.getElementById('radius').value);
-            const blur = parseInt(document.getElementById('blur').value);
-            const minOpacity = parseFloat(document.getElementById('minOpacity').value);
+            currentHeatmapParams = {
+                radius: parseInt(document.getElementById('radius').value),
+                blur: parseInt(document.getElementById('blur').value),
+                minOpacity: parseFloat(document.getElementById('minOpacity').value),
+                gradient: {
+                    0.1: `rgba(${hexToRgb(document.getElementById('lowColor').value)}, ${parseFloat(document.getElementById('lowOpacity').value)})`,
+                    0.5: `rgba(${hexToRgb(document.getElementById('midColor').value)}, ${parseFloat(document.getElementById('midOpacity').value)})`,
+                    1.0: `rgba(${hexToRgb(document.getElementById('highColor').value)}, ${parseFloat(document.getElementById('highOpacity').value)})`
+                }
+            };
 
-            // 获取调色盘的颜色和透明度
-            const lowColor = document.getElementById('lowColor').value;
-            const midColor = document.getElementById('midColor').value;
-            const highColor = document.getElementById('highColor').value;
-
-            const lowOpacity = parseFloat(document.getElementById('lowOpacity').value);
-            const midOpacity = parseFloat(document.getElementById('midOpacity').value);
-            const highOpacity = parseFloat(document.getElementById('highOpacity').value);
-
-            // 更新热力图参数
-            if (heatmapLayer) {
-                heatmapLayer.setOptions({
-                    radius: radius,
-                    blur: blur,
-                    minOpacity: minOpacity,
-                    gradient: {
-                        0.1: `rgba(${hexToRgb(lowColor)}, ${lowOpacity})`,
-                        0.5: `rgba(${hexToRgb(midColor)}, ${midOpacity})`,
-                        1.0: `rgba(${hexToRgb(highColor)}, ${highOpacity})`
-                    }
-                });
-            }
-
-            // 更新输入框显示值
-            document.getElementById('radius-value').value = radius;
-            document.getElementById('blur-value').value = blur;
-            document.getElementById('minOpacity-value').value = minOpacity;
+            updateHeatmapWithCurrentParams();
         }
 
         // 从输入框更新热力图

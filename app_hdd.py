@@ -10,7 +10,7 @@ import math
 
 
 # 加载配置文件并处理路径
-def load_config(config_file='config.json'):
+def load_config(config_file='myConfig.json'):
     with open(config_file, 'r', encoding='utf-8') as f:
         config = json.load(f)
 
@@ -171,18 +171,28 @@ def get_address(lat, lng):
 
 @app.route('/data')
 def get_data():
-    bounds = request.args.get('bounds')  # 格式：'lat1,lng1,lat2,lng2'
+    bounds = request.args.get('bounds')
+    start_time = request.args.get('start')
+    end_time = request.args.get('end')
+
     conn = sqlite3.connect('geo_data.db')
     c = conn.cursor()
 
+    query = '''SELECT path, lat, lon, timestamp FROM media'''
+    conditions = []
+    params = []
+
     if bounds:
         lat1, lng1, lat2, lng2 = map(float, bounds.split(','))
-        query = '''SELECT path, lat, lon, timestamp FROM media
-                   WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?'''
-        params = (min(lat1, lat2), max(lat1, lat2), min(lng1, lng2), max(lng1, lng2))
-    else:
-        query = 'SELECT path, lat, lon, timestamp FROM media'
-        params = ()
+        conditions.append('(lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?)')
+        params += [min(lat1, lat2), max(lat1, lat2), min(lng1, lng2), max(lng1, lng2)]
+
+    if start_time and end_time:
+        conditions.append('(timestamp BETWEEN ? AND ?)')
+        params += [start_time, end_time]
+
+    if conditions:
+        query += ' WHERE ' + ' AND '.join(conditions)
 
     c.execute(query, params)
     points = [{
