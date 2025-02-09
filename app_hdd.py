@@ -10,7 +10,7 @@ import math
 
 
 # 加载配置文件并处理路径
-def load_config(config_file='myConfig.json'):
+def load_config(config_file='config.json'):
     with open(config_file, 'r', encoding='utf-8') as f:
         config = json.load(f)
 
@@ -193,13 +193,15 @@ def get_data():
 
     if conditions:
         query += ' WHERE ' + ' AND '.join(conditions)
+    query += ' ORDER BY timestamp ASC'  # 排序
 
     c.execute(query, params)
     points = [{
         'path': row[0],
         'lat': row[1],
         'lng': row[2],
-        'timestamp': row[3]
+        'timestamp': row[3],
+        'sort_time': row[3]  # 增加排序用时间字段
     } for row in c.fetchall()]
     conn.close()
 

@@ -8,7 +8,7 @@
 An interactive heatmap tool to visualize your photo and video geolocation data, supporting large datasets and high-performance rendering.
 
 ## Translation
-[中文文档：README_zh.md](https://github.com/optimistices-me/MediaGPS2Map/blob/detached/README_zh.md)
+[中文文档：README_zh.md](https://github.com/optimistices-me/MediaGPS2Map/blob/main/README_zh.md)
 
 ## Key Features
 
