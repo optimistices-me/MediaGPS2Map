@@ -132,6 +132,16 @@
             width: 50px;
         }
 
+        .leaflet-arrowheads {
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.8; }
+            50% { opacity: 0.4; }
+            100% { opacity: 0.8; }
+        }
+
     </style>
 </head>
 <body>
@@ -141,7 +151,7 @@
             <h2>统计信息</h2>
             <p>文件数量: <span id="file-count">0</span></p>
             <p>时间范围: <span id="time-range">无</span></p>
-            <p>典型位置:</p>
+            <p>常去位置:</p>
             <ul id="sample-locations"></ul>
         </div>
 
@@ -208,6 +218,11 @@
             <p>轨迹显示:
                 <input type="checkbox" id="showPath" checked />
             </p>
+            <p>轨迹动画:
+                <input type="checkbox" id="animatePath" checked />
+                <input type="range" id="animationSpeed" min="50" max="1000" value="200" />
+                <span id="speedValue">200ms</span>
+            </p>
             <p>轨迹样式:
                 <select id="pathStyle">
                     <option value="solid">实线</option>
@@ -226,11 +241,14 @@
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <!-- Leaflet.heat 插件 -->
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <!-- Leaflet.arrowheads 插件 -->
+    <script src="https://unpkg.com/leaflet-arrowheads@1.3.1/src/leaflet-arrowheads.js"></script>
 
     <script>
         let currentPoints = [];
         let heatmapLayer = null;
         let pathLayer = null;
+        let pathLayers = L.layerGroup(); // 使用图层组管理多条轨迹
         const map = L.map('map').setView([30, 120], 3);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -259,10 +277,24 @@
         let initialStartTime = null;
         let initialEndTime = null;
 
+        // 动画控制变量
+        let animationInterval = null;
+        let currentAnimationIndex = 0;
+        let animatedPolyline = null;
+
         // 轨迹样式控制
         document.getElementById('pathColor').addEventListener('input', updatePathLayer);
         document.getElementById('pathWidth').addEventListener('input', updatePathLayer);
         document.getElementById('pathWidthValue').addEventListener('input', updatePathLayer);
+
+        // 添加动画速度控制
+        document.getElementById('animationSpeed').addEventListener('input', function() {
+            document.getElementById('speedValue').textContent = this.value + 'ms';
+            if (animationInterval) {
+                clearInterval(animationInterval);
+                startAnimation();
+            }
+        });
 
         function initTimeRange() {
             const timestamps = currentPoints.map(p => new Date(p.timestamp).getTime());
@@ -569,8 +601,18 @@
         // 更新轨迹可见性
         function updatePathVisibility() {
             const shouldShow = pathVisible && currentZoom >= 14;
-            if (pathLayer) {
-                shouldShow ? map.addLayer(pathLayer) : map.removeLayer(pathLayer);
+
+            // 增加可见性切换时的保护
+            if (shouldShow) {
+                if (pathLayer && pathLayer._latlngs.length >= 2) {
+                    map.addLayer(pathLayer);
+                }
+                if (animatedPolyline && animatedPolyline._latlngs.length >= 2) {
+                    map.addLayer(animatedPolyline);
+                }
+            } else {
+                if (pathLayer) map.removeLayer(pathLayer);
+                if (animatedPolyline) map.removeLayer(animatedPolyline);
             }
         }
 
@@ -589,6 +631,15 @@
 
         // 更新轨迹函数
         function updatePathLayer() {
+            // 清除现有动画
+            if (animationInterval) {
+                clearInterval(animationInterval);
+                currentAnimationIndex = 0;
+            }
+            if (animatedPolyline) {
+                map.removeLayer(animatedPolyline);
+            }
+
             if (pathLayer) {
                 map.removeLayer(pathLayer);
             }
@@ -623,13 +674,86 @@
                         frequency: '50px',
                         size: `${Math.min(15, pathWidth*5)}px`,
                         fill: true,
-                        yawn: 60,  // 箭头开合角度
-                        proportionalToTotal: false  // 固定箭头间距
+                        yawn: 60,
+                        proportionalToTotal: false,
+                        // 增加以下容错配置
+                        autoStart: false,      // 禁用自动初始化
+                        forceOffset: true,     // 强制偏移计算
+                        collapseAngle: 1      // 最小有效角度
                     }
                 }
             );
 
+            // 动画功能
+            if (document.getElementById('animatePath').checked) {
+                startAnimation();
+            }
+
             updatePathVisibility();
+        }
+
+        // 新增动画启动函数
+        function startAnimation() {
+            // 在开始前增加数据验证
+            if (currentPoints.length < 2) {
+                console.warn('轨迹点不足，无法生成动画');
+                return;
+            }
+
+            const sortedPoints = currentPoints.slice().sort((a, b) =>
+                new Date(a.sort_time) - new Date(b.sort_time)
+            );
+            const coordinates = sortedPoints.map(p => [p.lat, p.lng]);
+
+            // 确保坐标有效性
+            const validCoordinates = coordinates.filter(coord =>
+                !isNaN(coord[0]) && !isNaN(coord[1])
+            );
+            if (validCoordinates.length < 2) return;
+
+            animatedPolyline = L.polyline([], {
+                color: hexToRGBA(
+                    document.getElementById('pathColor').value,
+                    parseFloat(document.getElementById('pathOpacity').value)
+                ),
+                weight: parseInt(document.getElementById('pathWidth').value)
+            });
+
+            const speed = parseInt(document.getElementById('animationSpeed').value);
+            currentAnimationIndex = 0;
+
+            animationInterval = setInterval(() => {
+                if (currentAnimationIndex < coordinates.length - 1) {
+                    const segment = coordinates.slice(0, currentAnimationIndex + 2);
+
+                    // 过滤无效坐标
+                    const validSegment = segment.filter(coord =>
+                        !isNaN(coord[0]) && !isNaN(coord[1])
+                    );
+
+                    if (validSegment.length >= 2) {
+                        animatedPolyline.setLatLngs(validSegment);
+
+                        // 延迟箭头初始化
+                        if (currentAnimationIndex === 1) {  // 改为至少2个点
+                            try {
+                                animatedPolyline.arrowheads({
+                                    frequency: 'endonly',
+                                    size: '15px',
+                                    fill: true,
+                                    collapseAngle: 5  // 设置最小有效角度
+                                });
+                                animatedPolyline.addTo(map);
+                            } catch (e) {
+                                console.error('箭头初始化失败:', e);
+                            }
+                        }
+                        currentAnimationIndex++;
+                    }
+                } else {
+                    clearInterval(animationInterval);
+                }
+            }, speed);
         }
 
         // 新增颜色转换函数
@@ -693,6 +817,7 @@
                                 .setContent(`
                                     <b>文件路径:</b> ${closestPoint.path}<br>
                                     <b>拍摄时间:</b> ${closestPoint.timestamp}<br>
+                                    ${closestPoint.altitude ? `<b>海拔:</b> ${closestPoint.altitude}米<br>` : ''}
                                     <b>地址:</b> ${address}
                                 `)
                                 .openOn(map);

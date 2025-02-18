@@ -10,7 +10,7 @@ import math
 
 
 # 加载配置文件并处理路径
-def load_config(config_file='config.json'):
+def load_config(config_file='myConfig.json'):
     with open(config_file, 'r', encoding='utf-8') as f:
         config = json.load(f)
 
@@ -37,9 +37,9 @@ def parse_args():
 
 # 初始化数据库
 def init_db():
-    if os.path.exists('geo_data.db'):
-        print("数据库已存在，跳过初始化。")
-        return
+    # if os.path.exists('geo_data.db'):
+    #     print("数据库已存在，跳过初始化。")
+    #     return
 
     conn = sqlite3.connect('geo_data.db')
     c = conn.cursor()
@@ -49,6 +49,7 @@ def init_db():
                  (path TEXT PRIMARY KEY,
                   lat REAL,
                   lon REAL,
+                  altitude REAL, 
                   timestamp DATETIME,
                   modified_time DATETIME)''')
     c.execute('CREATE INDEX IF NOT EXISTS timestamp_idx ON media (timestamp)')
@@ -61,7 +62,8 @@ def init_db():
 def extract_metadata_batch(file_batch):
     cmd = ['exiftool', '-json', '-n', '-q',
            '-GPSLatitude', '-GPSLongitude', '-DateTimeOriginal',
-           '-FileModifyDate', '-Track*']
+           '-FileModifyDate', '-GPSAltitude',
+           '-Track*']
     cmd += file_batch
     result = subprocess.run(cmd, capture_output=True, text=True)
     return json.loads(result.stdout)
@@ -105,19 +107,28 @@ def process_batch(file_batch, conn):
             continue
 
         gps = data.get('GPSLatitude'), data.get('GPSLongitude')
+        altitude = data.get('GPSAltitude')
         date_str = data.get('DateTimeOriginal') or data.get('FileModifyDate')
 
         if all(gps) and date_str:
             try:
                 dt = datetime.strptime(date_str[:19], '%Y:%m:%d %H:%M:%S')
-                insert_data.append((path, float(gps[0]), float(gps[1]), dt.isoformat(), os.path.getmtime(path)))
+                if altitude and str(altitude).replace('-', '').replace('.', '').isdigit():
+                    altitude = float(altitude)
+                else:
+                    altitude = None  # 如果海拔信息无效，设为NULL
+                insert_data.append((path, float(gps[0]), float(gps[1]), altitude, dt.isoformat(), os.path.getmtime(path)))
             except (ValueError, TypeError) as e:
                 print(f"Error processing {path}: {e}")
         else:
             print(f"No GPS data found in {path}")
 
     if insert_data:
-        c.executemany('''REPLACE INTO media VALUES (?,?,?,?,?)''', insert_data)
+        c.executemany('''
+                    INSERT OR REPLACE INTO media 
+                    (path, lat, lon, altitude, timestamp, modified_time) 
+                    VALUES (?,?,?,?,?,?)
+                ''', insert_data)
         conn.commit()
         print(f"Inserted {len(insert_data)} records")
     else:
@@ -161,11 +172,19 @@ def get_address(lat, lng):
     # 将 WGS-84 坐标转换为 GCJ-02 坐标
     gcj_lat, gcj_lng = wgs84_to_gcj02(lat, lng)
     url = f'https://restapi.amap.com/v3/geocode/regeo?key={AMAP_API_KEY}&location={gcj_lng},{gcj_lat}'
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        if data['status'] == '1' and data['regeocode']:
-            return data['regeocode']['formatted_address']
+    try:
+        response = requests.get(url, timeout=3)
+        if response.status_code == 200:
+            data = response.json()
+            if data['status'] == '1' and data['regeocode']:
+                addr = data['regeocode']['addressComponent']
+                # 组合省+市+区
+                province = addr['province']
+                city = addr.get('city', province)  # 处理直辖市
+                district = addr['district']
+                return f"{province}{city}{district}"
+    except Exception as e:
+        print(f"地址查询失败: {e}")
     return '未知地址'
 
 
@@ -178,7 +197,7 @@ def get_data():
     conn = sqlite3.connect('geo_data.db')
     c = conn.cursor()
 
-    query = '''SELECT path, lat, lon, timestamp FROM media'''
+    query = '''SELECT path, lat, lon, altitude, timestamp FROM media'''
     conditions = []
     params = []
 
@@ -200,32 +219,57 @@ def get_data():
         'path': row[0],
         'lat': row[1],
         'lng': row[2],
-        'timestamp': row[3],
-        'sort_time': row[3]  # 增加排序用时间字段
+        'altitude': row[3],  # 新增海拔
+        'timestamp': row[4],
+        'sort_time': row[4]
     } for row in c.fetchall()]
-    conn.close()
+    # conn.close()
 
-    # 将地图划分为 5 个区域，每个区域选取一个典型位置
-    regions = [
-        (20, 110, 30, 120),  # 区域 1
-        (30, 110, 40, 120),  # 区域 2
-        (40, 110, 50, 120),  # 区域 3
-        (20, 120, 30, 130),  # 区域 4
-        (30, 120, 40, 130)  # 区域 5
-    ]
-    sample_points = []
-    for region in regions:
-        lat_min, lng_min, lat_max, lng_max = region
-        points_in_region = [p for p in points if lat_min <= p['lat'] <= lat_max and lng_min <= p['lng'] <= lng_max]
-        if points_in_region:
-            sample_points.append(points_in_region[0])  # 选取第一个点作为典型位置
+    # 使用网格聚合查询高频位置（0.01度约1公里精度）
+    grid_query = '''
+        SELECT ROUND(lat, 1) as lat_grid,   -- 0.1度约11公里精度
+               ROUND(lon, 1) as lon_grid,
+               COUNT(*) as count
+        FROM media
+        WHERE timestamp BETWEEN ? AND ?
+        GROUP BY lat_grid, lon_grid
+        ORDER BY count DESC
+        LIMIT 5
+    '''
+    c.execute(grid_query, (start_time or '', end_time or ''))
+    top_grids = c.fetchall()
 
-    # 获取典型位置的地址
-    addresses = [get_address(p['lat'], p['lng']) for p in sample_points]
+    # 获取每个网格的样本点
+    address_points = []
+    for grid in top_grids:
+        point_query = '''
+            SELECT lat, lon FROM media
+            WHERE ROUND(lat, 1) = ? 
+              AND ROUND(lon, 1) = ?
+            LIMIT 1
+        '''
+        c.execute(point_query, (grid[0], grid[1]))
+        point = c.fetchone()
+        if point:
+            address_points.append({'lat': point[0], 'lng': point[1]})
+
+    # 获取县级地址（修改后的地址解析函数）
+    addresses = []
+    for p in address_points:
+        addr = get_address(p['lat'], p['lng'])
+        # 提取县级信息
+        if '省' in addr and '市' in addr:
+            parts = addr.split('省', 1)[1].split('市', 1)
+            addresses.append(f"{parts[0]}市{parts[1].split('区', 1)[0]}区")
+        elif '市' in addr:
+            parts = addr.split('市', 1)
+            addresses.append(f"{parts[0]}市{parts[1].split('区', 1)[0]}区")
+        else:
+            addresses.append(addr.split('区', 1)[0] + '区')
 
     return {
         'points': points,
-        'addresses': addresses
+        'addresses': addresses[:5]  # 确保最多返回5个
     }
 
 
