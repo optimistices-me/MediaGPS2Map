@@ -124,24 +124,6 @@
             margin-left: 10px;
         }
 
-        #pathOpacity {
-            vertical-align: middle;
-            width: 60%;
-        }
-        #pathOpacityValue {
-            width: 50px;
-        }
-
-        .leaflet-arrowheads {
-            animation: pulse 1s infinite;
-        }
-
-        @keyframes pulse {
-            0% { opacity: 0.8; }
-            50% { opacity: 0.4; }
-            100% { opacity: 0.8; }
-        }
-
     </style>
 </head>
 <body>
@@ -207,34 +189,6 @@
                     </label>
                 </div>
             </p>
-
-            <p>轨迹颜色:
-                <input type="color" id="pathColor" value="#FF4500" />
-            </p>
-            <p>轨迹宽度:
-                <input type="range" id="pathWidth" min="1" max="10" value="3" />
-                <input type="number" id="pathWidthValue" value="3" />
-            </p>
-            <p>轨迹显示:
-                <input type="checkbox" id="showPath" checked />
-            </p>
-            <p>轨迹动画:
-                <input type="checkbox" id="animatePath" checked />
-                <input type="range" id="animationSpeed" min="50" max="1000" value="200" />
-                <span id="speedValue">200ms</span>
-            </p>
-            <p>轨迹样式:
-                <select id="pathStyle">
-                    <option value="solid">实线</option>
-                    <option value="dashed">虚线</option>
-                    <option value="dotted">点线</option>
-                </select>
-            </p>
-            <p>轨迹透明度:
-                <input type="range" id="pathOpacity" min="0" max="1" step="0.1" value="0.8" />
-                <input type="number" id="pathOpacityValue" min="0" max="1" step="0.1" value="0.8" />
-            </p>
-
         </div>
 
     <!-- Leaflet 核心库 -->
@@ -247,8 +201,7 @@
     <script>
         let currentPoints = [];
         let heatmapLayer = null;
-        let pathLayer = null;
-        let pathLayers = L.layerGroup(); // 使用图层组管理多条轨迹
+        let trackLayers = [];
         const map = L.map('map').setView([30, 120], 3);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
@@ -277,28 +230,62 @@
         let initialStartTime = null;
         let initialEndTime = null;
 
-        // 动画控制变量
-        let animationInterval = null;
-        let currentAnimationIndex = 0;
-        let animatedPolyline = null;
+        // 颜色生成函数
+        function getColorForDate(dateStr) {
+            const hash = dateStr.split('-').reduce((acc, cur) => acc + parseInt(cur), 0);
+            return `hsl(${hash * 137 % 360}, 70%, 50%)`;
+        }
 
-        // 轨迹样式控制
-        document.getElementById('pathColor').addEventListener('input', updatePathLayer);
-        document.getElementById('pathWidth').addEventListener('input', updatePathLayer);
-        document.getElementById('pathWidthValue').addEventListener('input', updatePathLayer);
+        // 更新轨迹显示
+        function updateTracks() {
+            // 清除旧轨迹
+            trackLayers.forEach(layer => map.removeLayer(layer));
+            trackLayers = [];
 
-        // 添加动画速度控制
-        document.getElementById('animationSpeed').addEventListener('input', function() {
-            document.getElementById('speedValue').textContent = this.value + 'ms';
-            if (animationInterval) {
-                clearInterval(animationInterval);
-                startAnimation();
-            }
-        });
+            // 获取当前地图边界
+            const bounds = map.getBounds();
+
+            // 按日期分组
+            const dailyGroups = currentPoints.reduce((acc, point) => {
+                if (bounds.contains([point.lat, point.lng])) {
+                    const date = point.timestamp.split('T')[0];
+                    if (!acc[date]) acc[date] = [];
+                    acc[date].push(point);
+                }
+                return acc;
+            }, {});
+
+            // 为每个日期创建带箭头的轨迹线
+            Object.entries(dailyGroups).forEach(([date, points]) => {
+                if (points.length < 2) return;
+
+                // 按时间排序
+                const sortedPoints = points.sort((a, b) =>
+                    new Date(a.timestamp) - new Date(b.timestamp)
+                );
+
+                // 创建带箭头的折线
+                const polyline = L.polyline(
+                    sortedPoints.map(p => [p.lat, p.lng]),
+                    {
+                        color: getColorForDate(date),
+                        weight: 3,
+                        arrowheads: {
+                            frequency: '50px',
+                            size: '15px',
+                            fill: true,
+                            yawn: 60
+                        }
+                    }
+                );
+
+                polyline.addTo(map);
+                trackLayers.push(polyline);
+            });
+        }
 
         function initTimeRange() {
             const timestamps = currentPoints.map(p => new Date(p.timestamp).getTime());
-            // 使用循环计算最小和最大时间戳，避免使用扩展运算符
             let minTimestamp = Infinity;
             let maxTimestamp = -Infinity;
             for (let t of timestamps) {
@@ -306,24 +293,20 @@
                 if (t > maxTimestamp) maxTimestamp = t;
             }
 
-            // 设置时间范围的最小值和最大值
             document.getElementById('start-time').min = new Date(minTimestamp).toISOString().slice(0,16);
             document.getElementById('start-time').max = new Date(maxTimestamp).toISOString().slice(0,16);
             document.getElementById('end-time').min = new Date(minTimestamp).toISOString().slice(0,16);
             document.getElementById('end-time').max = new Date(maxTimestamp).toISOString().slice(0,16);
 
-            // 保存初始时间区间
             initialStartTime = minTimestamp;
             initialEndTime = maxTimestamp;
 
-            // 默认值设置为最小时间和最大时间
             document.getElementById('start-time').value = new Date(minTimestamp).toISOString().slice(0,16);
             document.getElementById('end-time').value = new Date(maxTimestamp).toISOString().slice(0,16);
 
             startTime = minTimestamp;
             endTime = maxTimestamp;
 
-            // 设置时间轴的范围
             const timelineWidth = timeline.offsetWidth;
             const startPercent = (minTimestamp - minTimestamp) / (maxTimestamp - minTimestamp) * 100;
             const endPercent = (maxTimestamp - minTimestamp) / (maxTimestamp - minTimestamp) * 100;
@@ -331,26 +314,21 @@
             handleEnd.style.left = `${endPercent}%`;
         }
 
-        // 重置时间按钮功能
         document.getElementById('reset-time').addEventListener('click', () => {
-            // 重置时间输入框到初始值
             document.getElementById('start-time').value = new Date(initialStartTime).toISOString().slice(0,16);
             document.getElementById('end-time').value = new Date(initialEndTime).toISOString().slice(0,16);
 
-            // 重置时间条端点回初始值
             const startPercent = (initialStartTime - initialStartTime) / (initialEndTime - initialStartTime) * 100;
             const endPercent = (initialEndTime - initialStartTime) / (initialEndTime - initialStartTime) * 100;
             handleStart.style.left = `${startPercent}%`;
             handleEnd.style.left = `${endPercent}%`;
 
-            // 更新全局时间
             startTime = initialStartTime;
             endTime = initialEndTime;
 
-            updateTimeRange(); // 更新数据
+            updateTimeRange();
         });
 
-        // 更新侧栏信息
         let updateSidebarTimeout = null;
         function updateSidebar(data) {
             if (updateSidebarTimeout) {
@@ -359,10 +337,8 @@
 
             updateSidebarTimeout = setTimeout(() => {
                 const fileCount = data.points.length;
-                // 将所有时间戳提取出来
                 const timestamps = data.points.map(p => new Date(p.timestamp).getTime());
 
-                // 使用循环计算最小和最大时间戳，避免使用扩展运算符
                 let minTimestamp = Infinity;
                 let maxTimestamp = -Infinity;
                 for (let t of timestamps) {
@@ -375,13 +351,11 @@
                 document.getElementById('file-count').textContent = fileCount;
                 document.getElementById('time-range').textContent = `${minTime} - ${maxTime}`;
 
-                // 显示典型位置
                 const sampleLocations = document.getElementById('sample-locations');
                 sampleLocations.innerHTML = data.addresses.map(addr => `<li>${addr}</li>`).join('');
-            }, 300);  // 延迟 300ms 后执行
+            }, 300);
         }
 
-        // 拖动事件处理
         timelineContainer.addEventListener('mousedown', (e) => {
             isDragging = true;
             const rect = timeline.getBoundingClientRect();
@@ -414,18 +388,15 @@
             }
         });
 
-
         document.addEventListener('mouseup', () => {
             isDragging = false;
             currentHandle = null;
             updateTimeRange();
         });
 
-        // 输入框变化监听
         document.getElementById('start-time').addEventListener('change', updateTimeRange);
         document.getElementById('end-time').addEventListener('change', updateTimeRange);
 
-        // 更新时间处理函数
         function updateTimeRange() {
             const bounds = map.getBounds();
             const start = document.getElementById('start-time').value;
@@ -441,12 +412,12 @@
                 .then(response => response.json())
                 .then(data => {
                     currentPoints = data.points;
-                    updateHeatmapWithCurrentParams(); // 使用当前参数更新热图
+                    updateHeatmapWithCurrentParams();
+                    updateTracks();
                     updateSidebar(data);
                 });
         }
 
-        // 聚合数据函数
         function aggregatePoints(points, gridSize) {
             const aggregated = {};
             points.forEach(point => {
@@ -459,10 +430,11 @@
                 }
                 aggregated[key].count++;
             });
-            return Object.values(aggregated); // 返回聚合后的数据
+            return Object.values(aggregated);
         }
 
-        // 获取当前地图区域的数据
+        let debounceTimeout = null;
+
         function loadDataForBounds(bounds, updateTimeRange = true) {
             const params = new URLSearchParams({
                 bounds: `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`,
@@ -475,10 +447,10 @@
                 .then(data => {
                     currentPoints = data.points;
                     if (updateTimeRange) {
-                        initTimeRange(); // 初始化时间范围，只有在数据加载后触发
+                        initTimeRange();
                     }
-                    updateHeatmapWithCurrentParams(); // 使用当前参数更新热图
-                    if (currentZoom >= 14) updatePathLayer(); // 新增
+                    updateHeatmapWithCurrentParams();
+                    updateTracks();
                     updateSidebar(data);
                 });
         }
@@ -495,17 +467,8 @@
                 minOpacity: currentHeatmapParams.minOpacity,
                 gradient: currentHeatmapParams.gradient
             }).addTo(map);
-
-                if (currentZoom >= 14) {
-                    updatePathLayer();
-                } else if (pathLayer) {
-                    map.removeLayer(pathLayer);
-                }
         }
 
-        let debounceTimeout = null;
-
-        // 监听地图移动事件
         map.on('moveend', function () {
             if (debounceTimeout) {
                 clearTimeout(debounceTimeout);
@@ -513,16 +476,13 @@
 
             debounceTimeout = setTimeout(() => {
                 const bounds = map.getBounds();
-                // 确保缩放时不会触发时间范围的更新
-                loadDataForBounds(bounds, false);  // 传递一个标志位，避免时间范围更新
-            }, 200); // 延迟 200 毫秒触发
+                loadDataForBounds(bounds, false);
+            }, 200);
         });
 
-        // 初始化加载数据
         const initialBounds = map.getBounds();
         loadDataForBounds(initialBounds);
 
-        // 添加坐标转换函数
         function wgs84ToGcj02(lat, lng) {
             const a = 6378245.0;
             const ee = 0.00669342162296594323;
@@ -553,18 +513,15 @@
             return [lat + dLatFinal, lng + dLngFinal];
         }
 
-        // 热图参数控制控件
-        // 监听拖动条的变化
+        // 热图参数控制
         document.getElementById('radius').addEventListener('input', updateHeatmap);
         document.getElementById('blur').addEventListener('input', updateHeatmap);
         document.getElementById('minOpacity').addEventListener('input', updateHeatmap);
 
-        // 监听输入框的变化
         document.getElementById('radius-value').addEventListener('input', updateHeatmapFromInput);
         document.getElementById('blur-value').addEventListener('input', updateHeatmapFromInput);
         document.getElementById('minOpacity-value').addEventListener('input', updateHeatmapFromInput);
 
-        // 监听颜色和透明度的变化
         document.getElementById('lowColor').addEventListener('input', updateHeatmap);
         document.getElementById('midColor').addEventListener('input', updateHeatmap);
         document.getElementById('highColor').addEventListener('input', updateHeatmap);
@@ -572,7 +529,6 @@
         document.getElementById('midOpacity').addEventListener('input', updateHeatmap);
         document.getElementById('highOpacity').addEventListener('input', updateHeatmap);
 
-        // 更新热图
         function updateHeatmap() {
             currentHeatmapParams = {
                 radius: parseInt(document.getElementById('radius').value),
@@ -588,183 +544,6 @@
             updateHeatmapWithCurrentParams();
         }
 
-        // 新增轨迹相关参数
-        let pathVisible = true;
-        let currentZoom = map.getZoom();
-
-        // 监听地图缩放事件
-        map.on('zoomend', () => {
-            currentZoom = map.getZoom();
-            updatePathVisibility();
-        });
-
-        // 更新轨迹可见性
-        function updatePathVisibility() {
-            const shouldShow = pathVisible && currentZoom >= 14;
-
-            // 增加可见性切换时的保护
-            if (shouldShow) {
-                if (pathLayer && pathLayer._latlngs.length >= 2) {
-                    map.addLayer(pathLayer);
-                }
-                if (animatedPolyline && animatedPolyline._latlngs.length >= 2) {
-                    map.addLayer(animatedPolyline);
-                }
-            } else {
-                if (pathLayer) map.removeLayer(pathLayer);
-                if (animatedPolyline) map.removeLayer(animatedPolyline);
-            }
-        }
-
-        // 监听显示轨迹复选框
-        document.getElementById('showPath').addEventListener('change', function() {
-            pathVisible = this.checked;
-            updatePathVisibility();
-        });
-
-        // 监听轨迹样式变化
-        document.getElementById('pathStyle').addEventListener('change', updatePathLayer);
-
-        // 监听透明度变化
-        document.getElementById('pathOpacity').addEventListener('input', updatePathLayer);
-        document.getElementById('pathOpacityValue').addEventListener('input', updatePathLayer);
-
-        // 更新轨迹函数
-        function updatePathLayer() {
-            // 清除现有动画
-            if (animationInterval) {
-                clearInterval(animationInterval);
-                currentAnimationIndex = 0;
-            }
-            if (animatedPolyline) {
-                map.removeLayer(animatedPolyline);
-            }
-
-            if (pathLayer) {
-                map.removeLayer(pathLayer);
-            }
-
-            if (currentPoints.length < 2 || !pathVisible || currentZoom < 14) return;
-
-            // 获取样式参数
-            const pathColor = hexToRGBA(
-                document.getElementById('pathColor').value,
-                parseFloat(document.getElementById('pathOpacity').value)
-            );
-            const pathWidth = parseInt(document.getElementById('pathWidth').value);
-            const style = document.getElementById('pathStyle').value;
-
-            // 配置虚线样式
-            const dashStyles = {
-                solid: null,
-                dashed: '10,10',
-                dotted: '2,8'
-            };
-
-            // 创建带箭头的折线
-            pathLayer = L.polyline(
-                currentPoints.slice().sort((a, b) =>
-                    new Date(a.sort_time) - new Date(b.sort_time)
-                ).map(p => [p.lat, p.lng]),
-                {
-                    color: pathColor,
-                    weight: pathWidth,
-                    dashArray: dashStyles[style],
-                    arrowheads: {
-                        frequency: '50px',
-                        size: `${Math.min(15, pathWidth*5)}px`,
-                        fill: true,
-                        yawn: 60,
-                        proportionalToTotal: false,
-                        // 增加以下容错配置
-                        autoStart: false,      // 禁用自动初始化
-                        forceOffset: true,     // 强制偏移计算
-                        collapseAngle: 1      // 最小有效角度
-                    }
-                }
-            );
-
-            // 动画功能
-            if (document.getElementById('animatePath').checked) {
-                startAnimation();
-            }
-
-            updatePathVisibility();
-        }
-
-        // 新增动画启动函数
-        function startAnimation() {
-            // 在开始前增加数据验证
-            if (currentPoints.length < 2) {
-                console.warn('轨迹点不足，无法生成动画');
-                return;
-            }
-
-            const sortedPoints = currentPoints.slice().sort((a, b) =>
-                new Date(a.sort_time) - new Date(b.sort_time)
-            );
-            const coordinates = sortedPoints.map(p => [p.lat, p.lng]);
-
-            // 确保坐标有效性
-            const validCoordinates = coordinates.filter(coord =>
-                !isNaN(coord[0]) && !isNaN(coord[1])
-            );
-            if (validCoordinates.length < 2) return;
-
-            animatedPolyline = L.polyline([], {
-                color: hexToRGBA(
-                    document.getElementById('pathColor').value,
-                    parseFloat(document.getElementById('pathOpacity').value)
-                ),
-                weight: parseInt(document.getElementById('pathWidth').value)
-            });
-
-            const speed = parseInt(document.getElementById('animationSpeed').value);
-            currentAnimationIndex = 0;
-
-            animationInterval = setInterval(() => {
-                if (currentAnimationIndex < coordinates.length - 1) {
-                    const segment = coordinates.slice(0, currentAnimationIndex + 2);
-
-                    // 过滤无效坐标
-                    const validSegment = segment.filter(coord =>
-                        !isNaN(coord[0]) && !isNaN(coord[1])
-                    );
-
-                    if (validSegment.length >= 2) {
-                        animatedPolyline.setLatLngs(validSegment);
-
-                        // 延迟箭头初始化
-                        if (currentAnimationIndex === 1) {  // 改为至少2个点
-                            try {
-                                animatedPolyline.arrowheads({
-                                    frequency: 'endonly',
-                                    size: '15px',
-                                    fill: true,
-                                    collapseAngle: 5  // 设置最小有效角度
-                                });
-                                animatedPolyline.addTo(map);
-                            } catch (e) {
-                                console.error('箭头初始化失败:', e);
-                            }
-                        }
-                        currentAnimationIndex++;
-                    }
-                } else {
-                    clearInterval(animationInterval);
-                }
-            }, speed);
-        }
-
-        // 新增颜色转换函数
-        function hexToRGBA(hex, opacity) {
-            const r = parseInt(hex.slice(1, 3), 16),
-                  g = parseInt(hex.slice(3, 5), 16),
-                  b = parseInt(hex.slice(5, 7), 16);
-            return `rgba(${r},${g},${b},${opacity})`;
-        }
-
-        // 从输入框更新热图
         function updateHeatmapFromInput(event) {
             const id = event.target.id;
             const value = event.target.value;
@@ -777,10 +556,9 @@
                 document.getElementById('minOpacity').value = value;
             }
 
-            updateHeatmap(); // 更新热图
+            updateHeatmap();
         }
 
-        // 十六进制颜色转换为RGB格式
         function hexToRgb(hex) {
             const r = parseInt(hex.slice(1, 3), 16);
             const g = parseInt(hex.slice(3, 5), 16);
@@ -788,9 +566,6 @@
             return `${r}, ${g}, ${b}`;
         }
 
-
-
-        // 修改点击事件处理
         map.on('click', function (e) {
             const lat = e.latlng.lat;
             const lng = e.latlng.lng;
@@ -816,8 +591,11 @@
                                 .setLatLng([closestPoint.lat, closestPoint.lng])
                                 .setContent(`
                                     <b>文件路径:</b> ${closestPoint.path}<br>
+
                                     <b>拍摄时间:</b> ${closestPoint.timestamp}<br>
-                                    ${closestPoint.altitude ? `<b>海拔:</b> ${closestPoint.altitude}米<br>` : ''}
+
+                                    ${closestPoint.altitude ? `<b>海拔:</b> ${closestPoint.altitude}米<br>
+` : ''}
                                     <b>地址:</b> ${address}
                                 `)
                                 .openOn(map);

@@ -10,7 +10,7 @@ import math
 
 
 # 加载配置文件并处理路径
-def load_config(config_file='myConfig.json'):
+def load_config(config_file='config.json'):
     with open(config_file, 'r', encoding='utf-8') as f:
         config = json.load(f)
 
