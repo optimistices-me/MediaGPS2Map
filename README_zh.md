@@ -48,18 +48,25 @@ pip install flask requests
     "batch_size": 200
 }
 ```
+
 ### 运行程序
 1. 初始化数据库（首次运行）：
 
 ```bash
 python app_hdd.py
 ```
-2. 启动服务（后续运行可加--skip-db跳过数据库初始化）：
+2. 添加新媒体文件（增量更新）：
+
+```bash
+python app_hdd.py --add-data "新文件目录"
+```
+
+3. 启动服务（后续运行可加--skip-db跳过数据库初始化）：
 
 ```bash
 python app_hdd.py --skip-db
 ```
-3. 访问网页： 
+4. 访问网页： 
 
 打开浏览器访问 http://localhost:5000
 

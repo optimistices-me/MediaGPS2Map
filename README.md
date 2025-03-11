@@ -12,6 +12,7 @@ An interactive heatmap tool to visualize your photo and video geolocation data, 
 
 ## Key Features
 
+✅ Incremental updates with ```--add-data``` option
 ✅ Supports multiple media formats: HEIC/HEIF, JPG, PNG, MP4, MOV, and other mainstream photo and video formats  
 ✅ Intelligent GPS data parsing (photo + video location)  
 ✅ AMap API address parsing (automatic coordinate correction)  
@@ -58,12 +59,18 @@ pip install flask requests
 ```bash
 python app_hdd.py
 ```
-2. Start the service (for subsequent runs, use `--skip-db` to skip database initialization):
+
+2. Add new media files (incremental update):
+```bash
+python app_hdd.py --add-data "newDirectory"
+```
+
+3. Start the service (for subsequent runs, use `--skip-db` to skip database initialization):
 
 ```bash
 python app_hdd.py --skip-db
 ```
-3. Access the webpage:
+4. Access the webpage:
 
 Open your browser and go to http://localhost:5000
 
