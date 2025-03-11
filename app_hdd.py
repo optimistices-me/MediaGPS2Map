@@ -32,15 +32,12 @@ app = Flask(__name__)
 def parse_args():
     parser = argparse.ArgumentParser(description='照片位置热图生成工具')
     parser.add_argument('--skip-db', action='store_true', help='跳过数据库生成')
+    parser.add_argument('--add-data', type=str, help='增量添加新文件目录')
     return parser.parse_args()
 
 
 # 初始化数据库
 def init_db():
-    # if os.path.exists('geo_data.db'):
-    #     print("数据库已存在，跳过初始化。")
-    #     return
-
     conn = sqlite3.connect('geo_data.db')
     c = conn.cursor()
     c.execute('PRAGMA journal_mode = WAL')  # 启用 WAL 模式
@@ -223,20 +220,18 @@ def get_data():
         'timestamp': row[4],
         'sort_time': row[4]
     } for row in c.fetchall()]
-    # conn.close()
 
     # 使用网格聚合查询高频位置（0.01度约1公里精度）
     grid_query = '''
-        SELECT ROUND(lat, 1) as lat_grid,   -- 0.1度约11公里精度
+        SELECT ROUND(lat, 1) as lat_grid,
                ROUND(lon, 1) as lon_grid,
                COUNT(*) as count
         FROM media
-        WHERE timestamp BETWEEN ? AND ?
         GROUP BY lat_grid, lon_grid
         ORDER BY count DESC
         LIMIT 5
     '''
-    c.execute(grid_query, (start_time or '', end_time or ''))
+    c.execute(grid_query)
     top_grids = c.fetchall()
 
     # 获取每个网格的样本点
@@ -281,10 +276,51 @@ def index():
 if __name__ == '__main__':
     args = parse_args()
 
+    # 添加重载机制检查
+    if os.environ.get('WERKZEUG_RUN_MAIN') != 'true':
+        if not args.skip_db:
+            init_db()
+            if args.add_data:
+                print(f"正在增量添加目录：{args.add_data}")
+                process_files(args.add_data)
+            else:
+                with sqlite3.connect('geo_data.db') as conn:
+                    c = conn.cursor()
+                    c.execute('SELECT COUNT(*) FROM media')
+                    count = c.fetchone()[0]
+
+                if count == 0:
+                    print("检测到空数据库，开始处理初始目录...")
+                    for directory in directories:
+                        process_files(directory)
+                else:
+                    print("数据库已有数据，跳过初始目录处理")
+
     if not args.skip_db:
         init_db()
-        # 单线程顺序处理
-        for directory in directories:
-            process_files(directory)
+        if args.add_data:
+            print(f"正在增量添加目录：{args.add_data}")
+            process_files(args.add_data)
+        else:
+            # 增强型数据库检查逻辑
+            with sqlite3.connect('geo_data.db') as conn:
+                c = conn.cursor()
+                c.execute('SELECT COUNT(*) FROM media')
+                count = c.fetchone()[0]
+                print(f"当前数据库记录数：{count}")  # 添加调试信息
 
-    app.run(threaded=True, debug=True)
+            if count == 0:
+                print("检测到空数据库，开始处理初始目录...")
+                for directory in directories:
+                    print(f"📁 正在扫描初始目录：{directory}")
+                    process_files(directory)
+            else:
+                print("数据库已有数据，跳过初始目录处理")
+
+    print("🚀 启动Flask服务器")
+    # 调整服务器启动参数
+    app.run(
+        threaded=True,
+        debug=True,
+        use_reloader=False  # 关闭自动重载功能
+    )
