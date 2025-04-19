@@ -267,6 +267,30 @@ def get_data():
     }
 
 
+# 新增反向代理接口
+@app.route('/api/regeo')
+def amap_proxy():
+    lng = request.args.get('lng')
+    lat = request.args.get('lat')
+
+    # 从配置文件获取密钥
+    api_key = config['AMAP_API_KEY']
+
+    # 构造高德API请求
+    url = f'https://restapi.amap.com/v3/geocode/regeo?key={api_key}&location={lng},{lat}'
+
+    try:
+        response = requests.get(url, timeout=3)
+        return jsonify(response.json())
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+# 确保CORS配置
+from flask_cors import CORS
+
+CORS(app)  # 允许跨域请求
+
 @app.route('/')
 def index():
     return render_template('map.html')

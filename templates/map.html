@@ -124,6 +124,64 @@
             margin-left: 10px;
         }
 
+        .switch-container {
+            margin: 15px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(16px);
+        }
+
+        #timeline-container.range-mode {
+            display: block !important;
+        }
+        #timeline-container.single-mode {
+            display: none !important;
+        }
 
     </style>
 </head>
@@ -139,15 +197,25 @@
         </div>
 
         <div id="time-filter">
-            <h3>时间范围筛选</h3>
-            <div id="timeline-container">
+            <h3>时间选择模式</h3>
+            <div class="switch-container">
+                <label class="switch">
+                    <input type="checkbox" id="dateModeSwitch">
+                    <span class="slider round"></span>
+                </label>
+                <span id="mode-label">范围模式</span>
+            </div>
+            <div id="timeline-container" class="range-mode">
                 <div id="timeline"></div>
                 <div id="timeline-handle-start"></div>
                 <div id="timeline-handle-end"></div>
             </div>
-            <div class="time-input">
+            <div class="time-input" id="range-date-picker">
                 <input type="datetime-local" id="start-time" />
                 <input type="datetime-local" id="end-time" />
+            </div>
+            <div class="time-input" id="single-date-picker" style="display: none;">
+                <input type="date" id="single-date" />
             </div>
             <button class="reset-button" id="reset-time">重置起止时间</button>
         </div>
@@ -294,26 +362,44 @@
                 if (t > maxTimestamp) maxTimestamp = t;
             }
 
-            document.getElementById('start-time').min = new Date(minTimestamp).toISOString().slice(0,16);
-            document.getElementById('start-time').max = new Date(maxTimestamp).toISOString().slice(0,16);
-            document.getElementById('end-time').min = new Date(minTimestamp).toISOString().slice(0,16);
-            document.getElementById('end-time').max = new Date(maxTimestamp).toISOString().slice(0,16);
-
+            // 设置初始时间范围
             initialStartTime = minTimestamp;
             initialEndTime = maxTimestamp;
 
-            document.getElementById('start-time').value = new Date(minTimestamp).toISOString().slice(0,16);
-            document.getElementById('end-time').value = new Date(maxTimestamp).toISOString().slice(0,16);
+            // 更新输入框
+            const minDate = new Date(minTimestamp).toISOString().slice(0,16);
+            const maxDate = new Date(maxTimestamp).toISOString().slice(0,16);
+            document.getElementById('start-time').value = minDate;
+            document.getElementById('end-time').value = maxDate;
+            document.getElementById('single-date').value = new Date(minTimestamp).toISOString().slice(0,10);
 
-            startTime = minTimestamp;
-            endTime = maxTimestamp;
-
+            // 更新时间轴控件
             const timelineWidth = timeline.offsetWidth;
-            const startPercent = (minTimestamp - minTimestamp) / (maxTimestamp - minTimestamp) * 100;
-            const endPercent = (maxTimestamp - minTimestamp) / (maxTimestamp - minTimestamp) * 100;
+            const startPercent = 0;
+            const endPercent = 100;
             handleStart.style.left = `${startPercent}%`;
             handleEnd.style.left = `${endPercent}%`;
+
+            // 设置输入框的限制范围
+            document.getElementById('start-time').min = minDate;
+            document.getElementById('start-time').max = maxDate;
+            document.getElementById('end-time').min = minDate;
+            document.getElementById('end-time').max = maxDate;
+            document.getElementById('single-date').min = new Date(minTimestamp).toISOString().slice(0,10);
+            document.getElementById('single-date').max = new Date(maxTimestamp).toISOString().slice(0,10);
         }
+
+        // 添加单一日期输入监听
+        document.getElementById('single-date').addEventListener('change', updateTimeRange);
+
+        // 添加模式切换监听
+        document.getElementById('dateModeSwitch').addEventListener('change', function(e) {
+            const isSingleMode = e.target.checked;
+            document.getElementById('mode-label').textContent = isSingleMode ? '单日模式' : '范围模式';
+            document.getElementById('range-date-picker').style.display = isSingleMode ? 'none' : 'flex';
+            document.getElementById('single-date-picker').style.display = isSingleMode ? 'flex' : 'none';
+            updateTimeRange();
+        });
 
         document.getElementById('reset-time').addEventListener('click', () => {
             document.getElementById('start-time').value = new Date(initialStartTime).toISOString().slice(0,16);
@@ -399,14 +485,24 @@
         document.getElementById('end-time').addEventListener('change', updateTimeRange);
 
         function updateTimeRange() {
-            const bounds = map.getBounds();
-            const start = document.getElementById('start-time').value;
-            const end = document.getElementById('end-time').value;
+            const isSingleMode = document.getElementById('dateModeSwitch').checked;
+            let start, end;
 
+            if (isSingleMode) {
+                const dateStr = document.getElementById('single-date').value;
+                if (!dateStr) return;
+                start = dateStr + 'T00:00';
+                end = dateStr + 'T23:59';
+            } else {
+                start = document.getElementById('start-time').value;
+                end = document.getElementById('end-time').value;
+            }
+
+            const bounds = map.getBounds();
             const params = new URLSearchParams({
                 bounds: `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`,
-                start: start ? new Date(start).toISOString() : '',
-                end: end ? new Date(end).toISOString() : ''
+                start: start,
+                end: end
             });
 
             fetch(`/data?${params}`)
@@ -583,7 +679,7 @@
 
             if (closestPoint) {
                 const [gcjLat, gcjLng] = wgs84ToGcj02(closestPoint.lat, closestPoint.lng);
-                fetch(`https://restapi.amap.com/v3/geocode/regeo?key=8194eb1949ecf804aad037366e838ef1&location=${gcjLng},${gcjLat}`)
+                fetch(`/api/regeo?lng=${gcjLng}&lat=${gcjLat}`)
                     .then(response => response.json())
                     .then(data => {
                         if (data.status === '1' && data.regeocode) {
