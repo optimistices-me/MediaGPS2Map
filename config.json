@@ -1,0 +1,8 @@
+{
+    "AMAP_API_KEY": "YOUR_API_KEY_HERE",
+    "directories": [
+        "DIR1",
+        "DIR2"
+    ],
+    "batch_size": 200
+}
