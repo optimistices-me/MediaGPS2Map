@@ -193,6 +193,13 @@
             <p>文件数量: <span id="file-count">0</span></p>
             <p>时间范围: <span id="time-range">无</span></p>
             <p>常去位置:</p>
+            <div class="switch-container">
+                <label class="switch">
+                    <input type="checkbox" id="lockTrackSwitch">
+                    <span class="slider round"></span>
+                </label>
+                <span>锁定轨迹</span>
+            </div>
             <ul id="sample-locations"></ul>
         </div>
 
@@ -284,6 +291,9 @@
                 1.0: 'rgba(255, 0, 0, 0.2)'
             }
         };
+
+        // 锁定轨迹状态
+        let isTrackLocked = false;
 
         // 初始化时间范围
         let startTime = null;
@@ -401,6 +411,11 @@
             updateTimeRange();
         });
 
+        // 添加锁定轨迹开关监听
+        document.getElementById('lockTrackSwitch').addEventListener('change', function(e) {
+            isTrackLocked = e.target.checked;
+        });
+
         document.getElementById('reset-time').addEventListener('click', () => {
             document.getElementById('start-time').value = new Date(initialStartTime).toISOString().slice(0,16);
             document.getElementById('end-time').value = new Date(initialEndTime).toISOString().slice(0,16);
@@ -485,9 +500,83 @@
         document.getElementById('end-time').addEventListener('change', updateTimeRange);
 
         function updateTimeRange() {
+            // 如果锁定轨迹开启，只更新时间参数但不重新加载数据
+            if (isTrackLocked) {
+                // 仅根据时间筛选当前已有的点
+                const isSingleMode = document.getElementById('dateModeSwitch').checked;
+                let start, end;
+                if (isSingleMode) {
+                    const dateStr = document.getElementById('single-date').value;
+                    if (!dateStr) return;
+                    start = dateStr + 'T00:00';
+                    end = dateStr + 'T23:59';
+                } else {
+                    start = document.getElementById('start-time').value;
+                    end = document.getElementById('end-time').value;
+                }
+
+                // 过滤当前点数据
+                const startTime = new Date(start);
+                const endTime = new Date(end);
+                const filteredPoints = currentPoints.filter(point => {
+                    const pointTime = new Date(point.timestamp);
+                    return pointTime >= startTime && pointTime <= endTime;
+                });
+
+                // 更新热图和轨迹（使用过滤后的数据）
+                if (heatmapLayer) {
+                    map.removeLayer(heatmapLayer);
+                }
+                const points = filteredPoints.map(p => [p.lat, p.lng, 1]);
+                heatmapLayer = L.heatLayer(points, {
+                    radius: currentHeatmapParams.radius,
+                    blur: currentHeatmapParams.blur,
+                    minOpacity: currentHeatmapParams.minOpacity,
+                    gradient: currentHeatmapParams.gradient
+                }).addTo(map);
+
+                // 更新轨迹（使用过滤后的数据）
+                trackLayers.forEach(layer => map.removeLayer(layer));
+                trackLayers = [];
+
+                const bounds = map.getBounds();
+                const dailyGroups = filteredPoints.reduce((acc, point) => {
+                    if (bounds.contains([point.lat, point.lng])) {
+                        const date = point.timestamp.split('T')[0];
+                        if (!acc[date]) acc[date] = [];
+                        acc[date].push(point);
+                    }
+                    return acc;
+                }, {});
+
+                Object.entries(dailyGroups).forEach(([date, points]) => {
+                    if (points.length < 2) return;
+                    const sortedPoints = points.sort((a, b) =>
+                        new Date(a.timestamp) - new Date(b.timestamp)
+                    );
+                    const polyline = L.polyline(
+                        sortedPoints.map(p => [p.lat, p.lng]),
+                        {
+                            color: getColorForDate(date),
+                            weight: 3,
+                            arrowheads: {
+                                frequency: '50px',
+                                size: '15px',
+                                fill: true,
+                                yawn: 60
+                            }
+                        }
+                    );
+                    polyline.addTo(map);
+                    trackLayers.push(polyline);
+                });
+
+                return;
+            }
+
+            // 原有的逻辑（当未锁定轨迹时）
             const isSingleMode = document.getElementById('dateModeSwitch').checked;
             let start, end;
-
             if (isSingleMode) {
                 const dateStr = document.getElementById('single-date').value;
                 if (!dateStr) return;
@@ -497,14 +586,12 @@
                 start = document.getElementById('start-time').value;
                 end = document.getElementById('end-time').value;
             }
-
             const bounds = map.getBounds();
             const params = new URLSearchParams({
                 bounds: `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`,
                 start: start,
                 end: end
             });
-
             fetch(`/data?${params}`)
                 .then(response => response.json())
                 .then(data => {
@@ -514,6 +601,7 @@
                     updateSidebar(data);
                 });
         }
+
 
         function aggregatePoints(points, gridSize) {
             const aggregated = {};
@@ -533,6 +621,11 @@
         let debounceTimeout = null;
 
         function loadDataForBounds(bounds, updateTimeRange = true) {
+            // 如果锁定轨迹开启，则不加载新数据
+            if (isTrackLocked) {
+                return;
+            }
+
             const params = new URLSearchParams({
                 bounds: `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`,
                 start: document.getElementById('start-time').value,
@@ -570,10 +663,12 @@
             if (debounceTimeout) {
                 clearTimeout(debounceTimeout);
             }
-
             debounceTimeout = setTimeout(() => {
-                const bounds = map.getBounds();
-                loadDataForBounds(bounds, false);
+                // 如果锁定轨迹开启，则不重新加载数据
+                if (!isTrackLocked) {
+                    const bounds = map.getBounds();
+                    loadDataForBounds(bounds, false);
+                }
             }, 200);
         });
 
