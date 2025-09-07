@@ -3,7 +3,7 @@ import sqlite3
 import subprocess
 from datetime import datetime
 import json
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, jsonify
 import argparse
 import requests
 import math
