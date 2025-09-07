@@ -436,11 +436,9 @@
             if (updateSidebarTimeout) {
                 clearTimeout(updateSidebarTimeout);
             }
-
             updateSidebarTimeout = setTimeout(() => {
                 const fileCount = data.points.length;
                 const timestamps = data.points.map(p => new Date(p.timestamp).getTime());
-
                 let minTimestamp = Infinity;
                 let maxTimestamp = -Infinity;
                 for (let t of timestamps) {
@@ -449,14 +447,110 @@
                 }
                 const minTime = new Date(minTimestamp).toLocaleString();
                 const maxTime = new Date(maxTimestamp).toLocaleString();
-
                 document.getElementById('file-count').textContent = fileCount;
                 document.getElementById('time-range').textContent = `${minTime} - ${maxTime}`;
 
-                const sampleLocations = document.getElementById('sample-locations');
-                sampleLocations.innerHTML = data.addresses.map(addr => `<li>${addr}</li>`).join('');
+                // 分析当前显示区域的常去位置
+                analyzeFrequentLocations(data.points);
             }, 300);
         }
+
+        // 分析常去位置
+        function analyzeFrequentLocations(points) {
+            if (points.length === 0) {
+                document.getElementById('sample-locations').innerHTML = '<li>当前区域无数据</li>';
+                return;
+            }
+
+            // 获取当前地图边界
+            const bounds = map.getBounds();
+
+            // 过滤当前显示区域内的点
+            const visiblePoints = points.filter(point =>
+                bounds.contains([point.lat, point.lng])
+            );
+
+            if (visiblePoints.length === 0) {
+                document.getElementById('sample-locations').innerHTML = '<li>当前显示区域无数据</li>';
+                return;
+            }
+
+            // 按网格聚合点（用于识别热点区域）
+            const gridSize = 0.005; // 约500米的网格
+            const locationClusters = {};
+
+            visiblePoints.forEach(point => {
+                const latKey = Math.floor(point.lat / gridSize) * gridSize;
+                const lngKey = Math.floor(point.lng / gridSize) * gridSize;
+                const key = `${latKey.toFixed(6)},${lngKey.toFixed(6)}`;
+
+                if (!locationClusters[key]) {
+                    locationClusters[key] = {
+                        lat: latKey + gridSize/2,
+                        lng: lngKey + gridSize/2,
+                        count: 0,
+                        points: []
+                    };
+                }
+                locationClusters[key].count++;
+                locationClusters[key].points.push(point);
+            });
+
+            // 按访问次数排序，取前5个
+            const topLocations = Object.values(locationClusters)
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 5);
+
+            // 为热点位置获取地址
+            const sampleLocations = document.getElementById('sample-locations');
+            sampleLocations.innerHTML = '<li>正在分析常去位置...</li>';
+
+            Promise.all(topLocations.map(async (location, index) => {
+                try {
+                    // 转换坐标系用于地址查询
+                    const [gcjLat, gcjLng] = wgs84ToGcj02(location.lat, location.lng);
+                    const response = await fetch(`/api/regeo?lng=${gcjLng}&lat=${gcjLat}`);
+                    const data = await response.json();
+
+                    let address = `位置 ${index + 1}`;
+                    if (data.status === '1' && data.regeocode) {
+                        address = data.regeocode.formatted_address || `经纬度: ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`;
+                        // 简化地址显示
+                        if (address.length > 30) {
+                            const parts = address.split(/[区县市]/);
+                            address = parts.length > 1 ? parts[parts.length-1] : address.substring(0, 30) + '...';
+                        }
+                    }
+
+                    return {
+                        address: address,
+                        count: location.count,
+                        index: index
+                    };
+                } catch (error) {
+                    console.error('地址查询失败:', error);
+                    return {
+                        address: `经纬度: ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`,
+                        count: location.count,
+                        index: index
+                    };
+                }
+            })).then(results => {
+                // 按原始索引排序，确保显示顺序
+                results.sort((a, b) => a.index - b.index);
+
+                const locationHtml = results.map(result =>
+                    `<li>${result.address} <span style="color: #666;">(${result.count}次)</span></li>`
+                ).join('');
+
+                sampleLocations.innerHTML = locationHtml || '<li>未找到常去位置</li>';
+            }).catch(error => {
+                console.error('常去位置分析失败:', error);
+                sampleLocations.innerHTML = '<li>常去位置分析失败</li>';
+            });
+        }
+
+
 
         timelineContainer.addEventListener('mousedown', (e) => {
             isDragging = true;
@@ -570,6 +664,13 @@
                     polyline.addTo(map);
                     trackLayers.push(polyline);
                 });
+
+                // 更新侧栏信息（基于过滤后的数据）
+                const filteredData = {
+                    points: filteredPoints,
+                    addresses: [] // 这个在新的分析函数中不再使用
+                };
+                updateSidebar(filteredData);
 
                 return;
             }
