@@ -201,6 +201,21 @@
                 </label>
                 <span>锁定轨迹</span>
             </div>
+
+            <!-- 添加轨迹动画开关和速度控制 -->
+            <div class="switch-container">
+                <label class="switch">
+                    <input type="checkbox" id="animationSwitch">
+                    <span class="slider round"></span>
+                </label>
+                <span>显示轨迹移动</span>
+            </div>
+            <p>
+                轨迹移动速度:
+                <input type="range" id="animationSpeed" min="1" max="50" value="5">
+                <input type="number" id="animationSpeed-value" value="5" min="1" max="50"> 照片/秒
+            </p>
+
         </div>
 
         <div id="time-filter">
@@ -309,6 +324,14 @@
         let initialStartTime = null;
         let initialEndTime = null;
 
+        // 轨迹动画相关变量
+        let animationMarker = null;
+        let animationInterval = null;
+        let animationPoints = [];
+        let currentAnimationIndex = 0;
+        let isAnimationPlaying = false;
+
+
         // 颜色生成函数
         function getColorForDate(dateStr) {
             const hash = dateStr.split('-').reduce((acc, cur) => acc + parseInt(cur), 0);
@@ -415,6 +438,34 @@
         document.getElementById('lockTrackSwitch').addEventListener('change', function(e) {
             isTrackLocked = e.target.checked;
         });
+
+        // 动画开关事件监听
+        document.getElementById('animationSwitch').addEventListener('change', function(e) {
+            isAnimationPlaying = e.target.checked;
+            if (isAnimationPlaying) {
+                startAnimation();
+            } else {
+                stopAnimation();
+            }
+        });
+
+        // 动画速度滑块同步
+        document.getElementById('animationSpeed').addEventListener('input', function(e) {
+            document.getElementById('animationSpeed-value').value = e.target.value;
+            if (isAnimationPlaying) {
+                stopAnimation();
+                startAnimation();
+            }
+        });
+
+        document.getElementById('animationSpeed-value').addEventListener('input', function(e) {
+            document.getElementById('animationSpeed').value = e.target.value;
+            if (isAnimationPlaying) {
+                stopAnimation();
+                startAnimation();
+            }
+        });
+
 
         document.getElementById('reset-time').addEventListener('click', () => {
             document.getElementById('start-time').value = new Date(initialStartTime).toISOString().slice(0,16);
@@ -701,6 +752,12 @@
                     updateTracks();
                     updateSidebar(data);
                 });
+
+            // 如果动画正在播放,重新启动以应用新时间范围
+            if (isAnimationPlaying) {
+                stopAnimation();
+                startAnimation();
+            }
         }
 
 
@@ -775,6 +832,84 @@
 
         const initialBounds = map.getBounds();
         loadDataForBounds(initialBounds);
+
+        // 开始轨迹动画
+        function startAnimation() {
+            // 获取当前时间范围内的点
+            const isSingleMode = document.getElementById('dateModeSwitch').checked;
+            let start, end;
+
+            if (isSingleMode) {
+                const dateStr = document.getElementById('single-date').value;
+                if (!dateStr) return;
+                start = `${dateStr}T00:00`;
+                end = `${dateStr}T23:59`;
+            } else {
+                start = document.getElementById('start-time').value;
+                end = document.getElementById('end-time').value;
+            }
+
+            const startTime = new Date(start);
+            const endTime = new Date(end);
+
+            // 过滤并排序点
+            animationPoints = currentPoints
+                .filter(point => {
+                    const pointTime = new Date(point.timestamp);
+                    return pointTime >= startTime && pointTime <= endTime;
+                })
+                .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+            if (animationPoints.length === 0) return;
+
+            currentAnimationIndex = 0;
+
+            // 创建蓝色移动标记
+            if (!animationMarker) {
+                animationMarker = L.circleMarker([0, 0], {
+                    radius: 8,
+                    fillColor: '#0000FF',
+                    color: '#0000FF',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(map);
+            }
+
+            // 获取速度设置(照片/秒)
+            const speed = parseInt(document.getElementById('animationSpeed').value);
+            const interval = 1000 / speed; // 毫秒
+
+            // 开始动画循环
+            animationInterval = setInterval(() => {
+                if (currentAnimationIndex >= animationPoints.length) {
+                    // 动画结束,循环播放
+                    currentAnimationIndex = 0;
+                }
+
+                const point = animationPoints[currentAnimationIndex];
+                animationMarker.setLatLng([point.lat, point.lng]);
+
+                currentAnimationIndex++;
+            }, interval);
+        }
+
+        // 停止轨迹动画
+        function stopAnimation() {
+            if (animationInterval) {
+                clearInterval(animationInterval);
+                animationInterval = null;
+            }
+
+            if (animationMarker) {
+                map.removeLayer(animationMarker);
+                animationMarker = null;
+            }
+
+            animationPoints = [];
+            currentAnimationIndex = 0;
+        }
+
 
         function wgs84ToGcj02(lat, lng) {
             const a = 6378245.0;
