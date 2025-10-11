@@ -13,6 +13,7 @@
         #map {
             height: 100vh;
             width: 75%; /* 地图占 75% 宽度 */
+            position: relative; /* 使浮窗定位参考 map 区 */
         }
 
         #sidebar {
@@ -183,10 +184,38 @@
             display: none !important;
         }
 
+        /* 速度模式容器左对齐 */
+        .speed-mode-container {
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          gap: 8px;
+        }
+
+        /* 动画信息浮窗 */
+        #animationInfo {
+          display: none;       /* 默认隐藏 */
+          position: absolute;
+          top: 10px;
+          right: 10px;        /* map 区右上，侧栏左侧 */
+          z-index: 1000;
+          background: #fff;
+          padding: 8px;
+          border-radius: 4px;
+          box-shadow: 0 0 5px rgba(0,0,0,0.3);
+          font-size: 0.9em;
+        }
+
     </style>
 </head>
 <body>
-    <div id="map"></div>
+    <div id="map">
+        <div id="animationInfo" style="display:none;">
+          时间: <span id="infoTime">--</span><br>
+          地点: <span id="infoLocation">--</span>
+        </div>
+    </div>
+
     <div id="sidebar">
         <div>
             <h2>统计信息</h2>
@@ -214,9 +243,27 @@
                 轨迹移动速度:
                 <input type="range" id="animationSpeed" min="1" max="50" value="5">
                 <input type="number" id="animationSpeed-value" value="5" min="1" max="50"> 照片/秒
+
+                <div class="speed-mode-container">
+                  <label><input type="radio" name="speedMode" id="modeFPS" checked> 照片/秒</label>
+                  <label><input type="radio" name="speedMode" id="modeRatio"> 压缩比</label>
+                </div>
+                <input type="number" id="animationRatio" value="3600" min="1"> 秒/动画秒
+
             </p>
 
         </div>
+
+        <div id="animationControls">
+            <button id="btnRewind">⏪</button>
+            <button id="btnPlay">▶️</button>
+            <button id="btnPause">⏸️</button>
+            <button id="btnForward">⏩</button>
+            <p>轨迹小圆点进度条：</p>
+            <input type="range" id="animationTimeProgress" min="0" max="100" value="0">
+            <span id="progressLabel">0%</span>
+        </div>
+
 
         <div id="time-filter">
             <h3>时间选择模式</h3>
@@ -331,6 +378,64 @@
         let currentAnimationIndex = 0;
         let isAnimationPlaying = false;
 
+        // 地址缓存与浮窗引用
+        const infoBox = document.getElementById('animationInfo');
+        const infoTime = document.getElementById('infoTime');
+        const infoLocation = document.getElementById('infoLocation');
+
+        let isProgressDragging = false;
+        const progEl = document.getElementById('animationTimeProgress');
+        progEl.addEventListener('mousedown', ()=> isProgressDragging = true);
+        progEl.addEventListener('mouseup',   ()=> isProgressDragging = false);
+
+
+        // 线性插值函数
+        function animateSegment(from, to, duration, onStep, onEnd) {
+          const start = performance.now();
+          function step(now) {
+            const t = Math.min((now - start) / duration, 1);
+            const lat = from.lat + (to.lat - from.lat) * t;
+            const lng = from.lng + (to.lng - from.lng) * t;
+            onStep({ lat, lng });
+            if (t < 1 && !isPaused) requestAnimationFrame(step);
+            else onEnd();
+          }
+          requestAnimationFrame(step);
+        }
+
+        // 递归播放点列
+        function playNext(idx) {
+          if (idx >= animationPoints.length - 1) return;
+          const curr = animationPoints[idx];
+          const next = animationPoints[idx + 1];
+          const delta = new Date(next.timestamp) - new Date(curr.timestamp);
+          const duration = document.getElementById('modeRatio').checked
+            ? delta / parseInt(document.getElementById('animationRatio').value)
+            : (1000 / parseInt(document.getElementById('animationSpeed').value));
+
+          animateSegment(curr, next, duration,
+            pos => animationMarker.setLatLng([pos.lat, pos.lng]),
+            () => {
+                const pct = Math.round(((idx + 1) / animationPoints.length) * 100);
+                if (!isProgressDragging) {
+                  const progEl = document.getElementById('animationTimeProgress');
+                  progEl.value = pct;
+                  document.getElementById('progressLabel').textContent = pct + '%';
+                }
+              // 同步浮窗内容
+              const pt = animationPoints[currentAnimationIndex];
+              infoTime.textContent = pt.timestamp;
+              // 直接使用后端 `/data` 接口已返回的 pt.address
+              infoLocation.textContent = pt.address || '未知地址';
+
+
+              currentAnimationIndex = idx + 1;
+              if (!isPaused) playNext(idx + 1);
+            }
+          );
+        }
+
+
 
         // 颜色生成函数
         function getColorForDate(dateStr) {
@@ -443,8 +548,42 @@
         document.getElementById('animationSwitch').addEventListener('change', function(e) {
             isAnimationPlaying = e.target.checked;
             if (isAnimationPlaying) {
+                let playbackRate = 1;
+                let isPaused = false;
+                let animationProgress = 0;
+
+                // 线性插值移动
+                function animateSegment(from, to, duration, onStep, onEnd) {
+                  const start = performance.now();
+                  function step(now) {
+                    const t = Math.min((now - start) / duration, 1);
+                    const lat = from.lat + (to.lat - from.lat) * t;
+                    const lng = from.lng + (to.lng - from.lng) * t;
+                    onStep({lat, lng});
+                    if (t < 1 && !isPaused) requestAnimationFrame(step);
+                    else onEnd();
+                  }
+                  requestAnimationFrame(step);
+                }
                 startAnimation();
             } else {
+                let playbackRate = 1;
+                let isPaused = false;
+                let animationProgress = 0;
+
+                // 线性插值移动
+                function animateSegment(from, to, duration, onStep, onEnd) {
+                  const start = performance.now();
+                  function step(now) {
+                    const t = Math.min((now - start) / duration, 1);
+                    const lat = from.lat + (to.lat - from.lat) * t;
+                    const lng = from.lng + (to.lng - from.lng) * t;
+                    onStep({lat, lng});
+                    if (t < 1 && !isPaused) requestAnimationFrame(step);
+                    else onEnd();
+                  }
+                  requestAnimationFrame(step);
+                }
                 stopAnimation();
             }
         });
@@ -465,6 +604,47 @@
                 startAnimation();
             }
         });
+
+        // 播放/暂停/快退/快进 按钮
+        document.getElementById('btnPlay').addEventListener('click', () => {
+          isPaused = false;
+          playNext(currentAnimationIndex);
+        });
+        document.getElementById('btnPause').addEventListener('click', () => {
+          isPaused = true;
+        });
+        // 快退 5%
+        document.getElementById('btnRewind').addEventListener('click', () => {
+          isPaused = true;
+          currentAnimationIndex = Math.max(0, currentAnimationIndex - Math.floor(animationPoints.length*0.05));
+          const pt = animationPoints[currentAnimationIndex];
+          animationMarker.setLatLng([pt.lat, pt.lng]);
+          progEl.value = Math.round((currentAnimationIndex/(animationPoints.length-1))*100);
+          document.getElementById('progressLabel').textContent = progEl.value + '%';
+        });
+
+        // 快进 5%
+        document.getElementById('btnForward').addEventListener('click', () => {
+          isPaused = true;
+          currentAnimationIndex = Math.min(animationPoints.length-1,
+            currentAnimationIndex + Math.floor(animationPoints.length*0.05));
+          const pt = animationPoints[currentAnimationIndex];
+          animationMarker.setLatLng([pt.lat, pt.lng]);
+          progEl.value = Math.round((currentAnimationIndex/(animationPoints.length-1))*100);
+          document.getElementById('progressLabel').textContent = progEl.value + '%';
+        });
+
+
+        // 进度条拖动控制
+        progEl.addEventListener('input', e => {
+          isPaused = true;
+          const pct = e.target.value / 100;
+          currentAnimationIndex = Math.floor(pct * (animationPoints.length - 1));
+          const pt = animationPoints[currentAnimationIndex];
+          animationMarker.setLatLng([pt.lat, pt.lng]);
+          document.getElementById('progressLabel').textContent = Math.round(pct*100) + '%';
+        });
+
 
 
         document.getElementById('reset-time').addEventListener('click', () => {
@@ -835,6 +1015,7 @@
 
         // 开始轨迹动画
         function startAnimation() {
+            infoBox.style.display = 'block';
             // 获取当前时间范围内的点
             const isSingleMode = document.getElementById('dateModeSwitch').checked;
             let start, end;
@@ -876,26 +1057,17 @@
                 }).addTo(map);
             }
 
-            // 获取速度设置(照片/秒)
-            const speed = parseInt(document.getElementById('animationSpeed').value);
-            const interval = 1000 / speed; // 毫秒
+            // 计算播放速率
+            playbackRate = parseInt(document.getElementById('animationRatio').value);
+            // 从第 0 帧开始播放
+            currentAnimationIndex = 0;
+            playNext(0);
 
-            // 开始动画循环
-            animationInterval = setInterval(() => {
-                if (currentAnimationIndex >= animationPoints.length) {
-                    // 动画结束,循环播放
-                    currentAnimationIndex = 0;
-                }
-
-                const point = animationPoints[currentAnimationIndex];
-                animationMarker.setLatLng([point.lat, point.lng]);
-
-                currentAnimationIndex++;
-            }, interval);
         }
 
         // 停止轨迹动画
         function stopAnimation() {
+            infoBox.style.display = 'none';
             if (animationInterval) {
                 clearInterval(animationInterval);
                 animationInterval = null;

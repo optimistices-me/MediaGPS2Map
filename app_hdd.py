@@ -8,6 +8,9 @@ import argparse
 import requests
 import math
 
+# 缓存反向地理编码结果，减少外部API请求
+address_cache = {}
+
 # 加载配置文件并处理路径
 def load_config(config_file='config.json'):
     with open(config_file, 'r', encoding='utf-8') as f:
@@ -219,6 +222,16 @@ def get_data():
         'timestamp': row[4],
         'sort_time': row[4]
     } for row in c.fetchall()]
+
+    # 为每个点添加 address 字段（县/区），优先使用缓存
+    for point in points:
+        key = f"{point['lat']},{point['lng']}"
+        if key in address_cache:
+            point['address'] = address_cache[key]
+        else:
+            addr = get_address(point['lat'], point['lng'])
+            address_cache[key] = addr
+            point['address'] = addr
 
     # 使用网格聚合查询高频位置（0.01度约1公里精度）
     grid_query = '''
