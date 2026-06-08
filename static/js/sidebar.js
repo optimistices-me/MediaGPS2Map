@@ -139,4 +139,23 @@ function initSidebar() {
             startAnimation();
         }
     });
+
+    const tabFps = document.querySelector('.speed-tab[for="modeFPS"]');
+    const tabRatio = document.querySelector('.speed-tab[for="modeRatio"]');
+    const panelFps = document.getElementById('speed-fps');
+    const panelRatio = document.getElementById('speed-ratio');
+
+    document.getElementById('modeFPS').addEventListener('change', function () {
+        tabFps.classList.add('active');
+        tabRatio.classList.remove('active');
+        panelFps.style.display = 'flex';
+        panelRatio.style.display = 'none';
+    });
+
+    document.getElementById('modeRatio').addEventListener('change', function () {
+        tabRatio.classList.add('active');
+        tabFps.classList.remove('active');
+        panelRatio.style.display = 'flex';
+        panelFps.style.display = 'none';
+    });
 }

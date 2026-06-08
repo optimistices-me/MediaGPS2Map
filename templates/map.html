@@ -47,17 +47,22 @@
                 </label>
                 <span>显示轨迹移动</span>
             </div>
-            <p>
-                轨迹移动速度:
-                <input type="range" id="animationSpeed" min="1" max="50" value="5">
-                <input type="number" id="animationSpeed-value" value="5" min="1" max="50"> 照片/秒
-
-                <div class="speed-mode-container">
-                    <label><input type="radio" name="speedMode" id="modeFPS" checked> 照片/秒</label>
-                    <label><input type="radio" name="speedMode" id="modeRatio"> 压缩比</label>
+            <div class="speed-box">
+                <div class="speed-label">轨迹移动速度</div>
+                <div class="speed-tabs">
+                    <input type="radio" name="speedMode" id="modeFPS" checked hidden>
+                    <label class="speed-tab active" for="modeFPS">照片/秒</label>
+                    <input type="radio" name="speedMode" id="modeRatio" hidden>
+                    <label class="speed-tab" for="modeRatio">压缩比</label>
                 </div>
-                <input type="number" id="animationRatio" value="3600" min="1"> 秒/动画秒
-            </p>
+                <div class="speed-panel" id="speed-fps">
+                    <input type="range" id="animationSpeed" min="1" max="50" value="5">
+                    <input type="number" id="animationSpeed-value" value="5" min="1" max="50"> 照片/秒
+                </div>
+                <div class="speed-panel" id="speed-ratio" style="display:none;">
+                    <input type="number" id="animationRatio" value="3600" min="1"> 秒/动画秒
+                </div>
+            </div>
 
             <div class="switch-container">
                 <label class="switch">
@@ -71,15 +76,20 @@
             </div>
         </div>
 
-        <div id="animationControls">
-            <button id="btnRewind">⏪</button>
-            <button id="btnPlay">▶️</button>
-            <button id="btnPause">⏸️</button>
-            <button id="btnForward">⏩</button>
-            <p>轨迹小圆点进度条：</p>
-            <input type="range" id="animationTimeProgress" min="0" max="100" value="0">
-            <span id="progressLabel">0%</span>
-        </div>
+        <fieldset class="control-box" id="animationControls">
+            <legend>轨迹播放控制器</legend>
+            <div class="control-box-body">
+                <button id="btnRewind">⏪</button>
+                <button id="btnPlay">▶️</button>
+                <button id="btnPause">⏸️</button>
+                <button id="btnForward">⏩</button>
+                <div class="progress-row">
+                    <span>进度条：</span>
+                    <input type="range" id="animationTimeProgress" min="0" max="100" value="0">
+                    <span id="progressLabel">0%</span>
+                </div>
+            </div>
+        </fieldset>
 
         <div id="time-filter">
             <h3>时间选择模式</h3>
@@ -105,7 +115,8 @@
             <button class="reset-button" id="reset-time">重置起止时间</button>
         </div>
 
-        <div id="controls">
+        <div id="controls" style="display:none;">
+            <h3 class="control-box-title">热点形状控制</h3>
             <p>Radius:
                 <input type="range" id="radius" min="1" max="50" value="4" />
                 <input type="number" id="radius-value" value="4" />

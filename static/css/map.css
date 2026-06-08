@@ -26,6 +26,12 @@ body {
     margin-top: auto;
 }
 
+.control-box-title {
+    margin: 0 0 8px 0;
+    font-size: 0.95em;
+    color: #333;
+}
+
 input[type="range"] {
     width: 60%;
     margin-right: 10px;
@@ -184,11 +190,58 @@ input:checked + .slider:before {
     display: none !important;
 }
 
-.speed-mode-container {
+.speed-box {
+    margin: 10px 0;
+}
+
+.speed-label {
+    font-weight: bold;
+    font-size: 0.9em;
+    margin-bottom: 4px;
+}
+
+.speed-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 6px;
+}
+
+.speed-tab {
+    display: inline-block;
+    padding: 4px 12px;
+    border: 1px solid #2196F3;
+    background: #fff;
+    color: #2196F3;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: background 0.2s, color 0.2s;
+}
+
+.speed-tab:first-of-type {
+    border-radius: 4px 0 0 4px;
+}
+
+.speed-tab:last-of-type {
+    border-radius: 0 4px 4px 0;
+}
+
+.speed-tab.active {
+    background: #2196F3;
+    color: #fff;
+}
+
+.speed-panel {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
-    gap: 8px;
+    gap: 6px;
+}
+
+.speed-panel input[type="range"] {
+    width: 55%;
+}
+
+.speed-panel input[type="number"] {
+    width: 65px;
 }
 
 #animationInfo {
@@ -206,6 +259,7 @@ input:checked + .slider:before {
 
 /* 常去位置固定大小框 */
 #freq-locations-box {
+    height: 160px;
     max-height: 160px;
     overflow-y: auto;
     border: 1px solid #ddd;
@@ -275,4 +329,55 @@ input:checked + .slider:before {
     margin-top: 10px;
     padding: 5px 15px;
     cursor: pointer;
+}
+
+.control-box {
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 10px 0;
+}
+
+.control-box legend {
+    font-weight: bold;
+    font-size: 0.95em;
+    color: #333;
+    padding: 0 6px;
+}
+
+.control-box-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+}
+
+.control-box-body button {
+    padding: 4px 8px;
+    font-size: 1.1em;
+    cursor: pointer;
+    border: 1px solid #bbb;
+    border-radius: 3px;
+    background: #fff;
+}
+
+.control-box-body button:hover {
+    background: #e8e8e8;
+}
+
+.progress-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-basis: 100%;
+    margin-top: 6px;
+}
+
+.progress-row span {
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+
+.progress-row input[type="range"] {
+    flex: 1;
 }

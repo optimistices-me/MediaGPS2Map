@@ -100,6 +100,7 @@ document.getElementById('displayModeSwitch').addEventListener('change', function
     const labels = document.querySelectorAll('.mode-toggle .mode-label');
     labels[0].style.fontWeight = showMode === 'trajectory' ? 'bold' : 'normal';
     labels[1].style.fontWeight = showMode === 'heatmap' ? 'bold' : 'normal';
+    document.getElementById('controls').style.display = showMode === 'heatmap' ? 'block' : 'none';
     renderTracks(currentPoints);
 });
 document.querySelectorAll('.mode-toggle .mode-label')[0].style.fontWeight = 'bold';
