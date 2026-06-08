@@ -14,6 +14,8 @@
     </div>
 
     <div id="sidebar">
+        <h1 class="app-title">GPS2Map 照片轨迹地图</h1>
+
         <div>
             <div class="mode-toggle">
                 <span class="mode-label">轨迹模式</span>
@@ -53,16 +55,16 @@
                 <div class="speed-box">
                     <div class="speed-label">移动速度</div>
                     <div class="speed-tabs">
-                        <input type="radio" name="speedMode" id="modeFPS" checked hidden>
-                        <label class="speed-tab active" for="modeFPS">照片/秒</label>
-                        <input type="radio" name="speedMode" id="modeRatio" hidden>
-                        <label class="speed-tab" for="modeRatio">压缩比</label>
+                        <input type="radio" name="speedMode" id="modeFPS" hidden>
+                        <label class="speed-tab" for="modeFPS">照片/秒</label>
+                        <input type="radio" name="speedMode" id="modeRatio" checked hidden>
+                        <label class="speed-tab active" for="modeRatio">压缩比</label>
                     </div>
-                    <div class="speed-panel" id="speed-fps">
+                    <div class="speed-panel" id="speed-fps" style="display:none;">
                         <input type="range" id="animationSpeed" min="1" max="50" value="5">
                         <input type="number" id="animationSpeed-value" value="5" min="1" max="50"> 照片/秒
                     </div>
-                    <div class="speed-panel" id="speed-ratio" style="display:none;">
+                    <div class="speed-panel" id="speed-ratio">
                         <input type="number" id="animationRatio" value="3600" min="1"> 秒/动画秒
                     </div>
                 </div>
@@ -74,7 +76,7 @@
                     <button id="btnForward" title="快进">⏩</button>
                     <button id="btnReset" title="重置">⏮️</button>
                     <div class="progress-row">
-                        <span>进度条：</span>
+                        <div class="progress-label-row">进度条：</div>
                         <input type="range" id="animationTimeProgress" min="0" max="100" value="0">
                         <span id="progressLabel">0%</span>
                     </div>
@@ -82,7 +84,7 @@
             </div>
         </div>
 
-        <div id="time-filter">
+        <div class="section-box" id="time-filter">
             <h3 class="section-title">时间选择模式</h3>
             <div class="switch-container">
                 <label class="switch">
@@ -99,20 +101,15 @@
             <div class="time-input" id="range-date-picker">
                 <input type="datetime-local" id="start-time" />
                 <input type="datetime-local" id="end-time" />
+                <button class="icon-btn" id="reset-time" title="重置起止时间">↺</button>
             </div>
             <div class="time-input" id="single-date-picker" style="display: none;">
                 <input type="date" id="single-date" />
+                <button class="icon-btn" id="reset-time-single" title="重置日期">↺</button>
             </div>
-            <button class="reset-button" id="reset-time">重置起止时间</button>
 
             <div class="holiday-row">
-                <div class="switch-container" style="margin:0;">
-                    <label class="switch">
-                        <input type="checkbox" id="holidaySwitch">
-                        <span class="slider round"></span>
-                    </label>
-                    <span>节假日识别</span>
-                </div>
+                <button id="holidayBtn" class="holiday-toggle-btn">节假日识别</button>
                 <div id="holiday-popover" class="popover" style="display:none;">
                     <div id="holiday-list"></div>
                 </div>

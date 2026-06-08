@@ -177,4 +177,9 @@ function initTimeline() {
 
         updateTimeRange();
     });
+
+    document.getElementById('reset-time-single').addEventListener('click', () => {
+        document.getElementById('single-date').value = new Date(initialStartTime).toISOString().slice(0, 10);
+        updateTimeRange();
+    });
 }

@@ -1,13 +1,18 @@
-let holidayEnabled = false;
-
 function initHoliday() {
-    document.getElementById('holidaySwitch').addEventListener('change', function (e) {
-        holidayEnabled = e.target.checked;
+    document.getElementById('holidayBtn').addEventListener('click', function () {
         const popover = document.getElementById('holiday-popover');
-        if (holidayEnabled) {
+        if (popover.style.display === 'block') {
+            popover.style.display = 'none';
+        } else {
             loadHolidayData();
             popover.style.display = 'block';
-        } else {
+        }
+    });
+
+    document.addEventListener('click', function (e) {
+        const popover = document.getElementById('holiday-popover');
+        const btn = document.getElementById('holidayBtn');
+        if (popover.style.display === 'block' && !popover.contains(e.target) && e.target !== btn) {
             popover.style.display = 'none';
         }
     });
@@ -32,7 +37,8 @@ function loadHolidayData() {
                 btn.className = 'holiday-btn';
                 btn.textContent = `${h.name}: ${h.start} ~ ${h.end} (${h.photo_count}张)`;
                 btn.title = `官方假期: ${h.official_start} ~ ${h.official_end}`;
-                btn.addEventListener('click', () => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     document.getElementById('start-time').value = h.start + 'T00:00';
                     document.getElementById('end-time').value = h.end + 'T23:59';
 
@@ -48,8 +54,6 @@ function loadHolidayData() {
                     });
 
                     document.getElementById('holiday-popover').style.display = 'none';
-                    document.getElementById('holidaySwitch').checked = false;
-                    holidayEnabled = false;
                 });
                 listEl.appendChild(btn);
             });

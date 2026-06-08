@@ -26,6 +26,14 @@ body {
     margin-top: auto;
 }
 
+.app-title {
+    margin: 0 0 12px 0;
+    font-size: 1.4em;
+    color: #1a237e;
+    text-align: center;
+    letter-spacing: 2px;
+}
+
 .section-title {
     margin: 16px 0 6px 0;
     font-size: 1.05em;
@@ -95,7 +103,11 @@ label {
 }
 
 #time-filter {
-    margin: 20px 0;
+    margin: 0;
+}
+
+#time-filter .section-title {
+    margin-top: 0;
 }
 
 #timeline-container {
@@ -130,13 +142,30 @@ label {
 
 .time-input {
     display: flex;
-    gap: 10px;
+    gap: 6px;
     margin-top: 30px;
 }
 
 .time-input input {
-    width: 45%;
+    flex: 1;
+    min-width: 0;
     padding: 5px;
+}
+
+.time-input .icon-btn {
+    flex: none;
+    flex-basis: 32px;
+    padding: 2px;
+    font-size: 1.2em;
+    line-height: 1;
+    cursor: pointer;
+    border: 1px solid #bbb;
+    border-radius: 3px;
+    background: #fff;
+}
+
+.time-input .icon-btn:hover {
+    background: #e8e8e8;
 }
 
 #controls select {
@@ -353,6 +382,22 @@ input:checked + .slider:before {
     background: #bbdefb;
 }
 
+.holiday-toggle-btn {
+    padding: 6px 16px;
+    border: 1px solid #2196F3;
+    border-radius: 4px;
+    background: #fff;
+    color: #2196F3;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background 0.2s, color 0.2s;
+}
+
+.holiday-toggle-btn:hover {
+    background: #2196F3;
+    color: #fff;
+}
+
 #holiday-list {
     margin-top: 0;
 }
@@ -389,10 +434,17 @@ input:checked + .slider:before {
 
 .progress-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 6px;
     flex-basis: 100%;
     margin-top: 6px;
+}
+
+.progress-label-row {
+    width: 100%;
+    font-size: 0.85em;
+    margin-bottom: 2px;
 }
 
 .progress-row span {
