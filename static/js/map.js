@@ -57,9 +57,20 @@ map.on('click', function (e) {
     const lat = e.latlng.lat;
     const lng = e.latlng.lng;
 
+    const range = getActiveTimeRange();
+    let searchPoints = currentPoints;
+    if (range) {
+        const start = new Date(range.start);
+        const end = new Date(range.end);
+        searchPoints = currentPoints.filter(point => {
+            const t = new Date(point.timestamp);
+            return t >= start && t <= end;
+        });
+    }
+
     let closestPoint = null;
     let minDistance = Infinity;
-    currentPoints.forEach(p => {
+    searchPoints.forEach(p => {
         const distance = Math.sqrt(Math.pow(p.lat - lat, 2) + Math.pow(p.lng - lng, 2));
         if (distance < minDistance) {
             minDistance = distance;
@@ -78,7 +89,7 @@ map.on('click', function (e) {
                         .setLatLng([closestPoint.lat, closestPoint.lng])
                         .setContent(`
                             <b>文件路径:</b> ${closestPoint.path}<br>
-                            <b>拍摄时间:</b> ${closestPoint.timestamp}<br>
+                            <b>拍摄时间:</b> ${toUTC8(closestPoint.timestamp)}<br>
                             ${closestPoint.altitude ? `<b>海拔:</b> ${closestPoint.altitude}米<br>` : ''}
                             <b>地址:</b> ${address}
                         `)

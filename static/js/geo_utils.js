@@ -1,3 +1,8 @@
+function toUTC8(isoStr) {
+    const d = new Date(isoStr + '+08:00');
+    return d.toLocaleString('zh-CN', { hour12: false });
+}
+
 function wgs84ToGcj02(lat, lng) {
     const a = 6378245.0;
     const ee = 0.00669342162296594323;

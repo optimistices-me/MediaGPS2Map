@@ -26,6 +26,21 @@ body {
     margin-top: auto;
 }
 
+.section-title {
+    margin: 16px 0 6px 0;
+    font-size: 1.05em;
+    color: #333;
+    border-bottom: 2px solid #2196F3;
+    padding-bottom: 4px;
+}
+
+.section-box {
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 10px 0;
+}
+
 .control-box-title {
     margin: 0 0 8px 0;
     font-size: 0.95em;
@@ -191,7 +206,7 @@ input:checked + .slider:before {
 }
 
 .speed-box {
-    margin: 10px 0;
+    margin: 6px 0;
 }
 
 .speed-label {
@@ -259,8 +274,8 @@ input:checked + .slider:before {
 
 /* 常去位置固定大小框 */
 #freq-locations-box {
-    height: 160px;
-    max-height: 160px;
+    height: 200px;
+    max-height: 200px;
     overflow-y: auto;
     border: 1px solid #ddd;
     padding: 0 8px;
@@ -297,7 +312,28 @@ input:checked + .slider:before {
     min-width: 60px;
 }
 
-/* 节假日按钮 */
+/* 节假日按钮与悬浮窗 */
+.holiday-row {
+    margin-top: 12px;
+    position: relative;
+}
+
+.popover {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    margin-bottom: 6px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    padding: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 10;
+}
+
 .holiday-btn {
     display: block;
     width: 100%;
@@ -318,7 +354,7 @@ input:checked + .slider:before {
 }
 
 #holiday-list {
-    margin-top: 8px;
+    margin-top: 0;
 }
 
 #holiday-detail {
@@ -329,20 +365,6 @@ input:checked + .slider:before {
     margin-top: 10px;
     padding: 5px 15px;
     cursor: pointer;
-}
-
-.control-box {
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    padding: 8px 12px;
-    margin: 10px 0;
-}
-
-.control-box legend {
-    font-weight: bold;
-    font-size: 0.95em;
-    color: #333;
-    padding: 0 6px;
 }
 
 .control-box-body {

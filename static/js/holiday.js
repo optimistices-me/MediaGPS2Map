@@ -3,10 +3,12 @@ let holidayEnabled = false;
 function initHoliday() {
     document.getElementById('holidaySwitch').addEventListener('change', function (e) {
         holidayEnabled = e.target.checked;
+        const popover = document.getElementById('holiday-popover');
         if (holidayEnabled) {
             loadHolidayData();
+            popover.style.display = 'block';
         } else {
-            document.getElementById('holiday-list').innerHTML = '';
+            popover.style.display = 'none';
         }
     });
 }
@@ -44,6 +46,10 @@ function loadHolidayData() {
                         isAnimationPlaying = true;
                         startAnimation();
                     });
+
+                    document.getElementById('holiday-popover').style.display = 'none';
+                    document.getElementById('holidaySwitch').checked = false;
+                    holidayEnabled = false;
                 });
                 listEl.appendChild(btn);
             });

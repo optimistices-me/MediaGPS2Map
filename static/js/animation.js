@@ -43,7 +43,7 @@ function playNext(idx) {
                 progEl.value = pct;
                 document.getElementById('progressLabel').textContent = pct + '%';
             }
-            infoTime.textContent = next.timestamp;
+            infoTime.textContent = toUTC8(next.timestamp);
             infoLocation.textContent = next.address || '未知地址';
 
             currentAnimationIndex = idx + 1;
@@ -147,5 +147,16 @@ function initAnimation() {
         }
         progEl.value = Math.round((currentAnimationIndex / (animationPoints.length - 1)) * 100);
         document.getElementById('progressLabel').textContent = progEl.value + '%';
+    });
+
+    document.getElementById('btnReset').addEventListener('click', () => {
+        isPaused = true;
+        currentAnimationIndex = 0;
+        if (animationPoints.length > 0) {
+            const pt = animationPoints[0];
+            animationMarker.setLatLng([pt.lat, pt.lng]);
+        }
+        progEl.value = 0;
+        document.getElementById('progressLabel').textContent = '0%';
     });
 }

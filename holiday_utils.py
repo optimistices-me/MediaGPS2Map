@@ -87,6 +87,22 @@ def detect_holiday_periods():
     return results
 
 
+NAME_TRANSLATION = {
+    "New Year's Day": "元旦",
+    "Spring Festival": "春节",
+    "Tomb-sweeping Day": "清明节",
+    "Tomb Sweeping Day": "清明节",
+    "Labour Day": "劳动节",
+    "Labor Day": "劳动节",
+    "Dragon Boat Festival": "端午节",
+    "Mid-autumn Festival": "中秋节",
+    "Mid-Autumn Festival": "中秋节",
+    "National Day": "国庆节",
+    "New Year's Eve": "除夕",
+    "Chinese New Year's Eve": "除夕",
+}
+
+
 def _get_holiday_name(start, end):
     try:
         from chinese_calendar import get_holiday_detail
@@ -94,7 +110,7 @@ def _get_holiday_name(start, end):
         while current <= end:
             is_hol, name = get_holiday_detail(current)
             if is_hol and name:
-                return name
+                return NAME_TRANSLATION.get(name, name)
             current += timedelta(days=1)
     except Exception:
         pass

@@ -24,7 +24,7 @@
                 <span class="mode-label">热点图模式</span>
             </div>
 
-            <h2>统计信息</h2>
+            <h3 class="section-title">统计信息</h3>
             <p>文件数量: <span id="file-count">0</span></p>
             <p>时间范围: <span id="time-range">无</span></p>
             <p>常去位置:</p>
@@ -47,52 +47,43 @@
                 </label>
                 <span>显示轨迹移动</span>
             </div>
-            <div class="speed-box">
-                <div class="speed-label">轨迹移动速度</div>
-                <div class="speed-tabs">
-                    <input type="radio" name="speedMode" id="modeFPS" checked hidden>
-                    <label class="speed-tab active" for="modeFPS">照片/秒</label>
-                    <input type="radio" name="speedMode" id="modeRatio" hidden>
-                    <label class="speed-tab" for="modeRatio">压缩比</label>
-                </div>
-                <div class="speed-panel" id="speed-fps">
-                    <input type="range" id="animationSpeed" min="1" max="50" value="5">
-                    <input type="number" id="animationSpeed-value" value="5" min="1" max="50"> 照片/秒
-                </div>
-                <div class="speed-panel" id="speed-ratio" style="display:none;">
-                    <input type="number" id="animationRatio" value="3600" min="1"> 秒/动画秒
-                </div>
-            </div>
 
-            <div class="switch-container">
-                <label class="switch">
-                    <input type="checkbox" id="holidaySwitch">
-                    <span class="slider round"></span>
-                </label>
-                <span>节假日识别</span>
-            </div>
-            <div id="holiday-detail">
-                <div id="holiday-list"></div>
+            <div class="section-box">
+                <h3 class="section-title">轨迹控制</h3>
+                <div class="speed-box">
+                    <div class="speed-label">移动速度</div>
+                    <div class="speed-tabs">
+                        <input type="radio" name="speedMode" id="modeFPS" checked hidden>
+                        <label class="speed-tab active" for="modeFPS">照片/秒</label>
+                        <input type="radio" name="speedMode" id="modeRatio" hidden>
+                        <label class="speed-tab" for="modeRatio">压缩比</label>
+                    </div>
+                    <div class="speed-panel" id="speed-fps">
+                        <input type="range" id="animationSpeed" min="1" max="50" value="5">
+                        <input type="number" id="animationSpeed-value" value="5" min="1" max="50"> 照片/秒
+                    </div>
+                    <div class="speed-panel" id="speed-ratio" style="display:none;">
+                        <input type="number" id="animationRatio" value="3600" min="1"> 秒/动画秒
+                    </div>
+                </div>
+
+                <div class="control-box-body" style="margin-top:8px;">
+                    <button id="btnRewind" title="快退">⏪</button>
+                    <button id="btnPlay" title="播放">▶️</button>
+                    <button id="btnPause" title="暂停">⏸️</button>
+                    <button id="btnForward" title="快进">⏩</button>
+                    <button id="btnReset" title="重置">⏮️</button>
+                    <div class="progress-row">
+                        <span>进度条：</span>
+                        <input type="range" id="animationTimeProgress" min="0" max="100" value="0">
+                        <span id="progressLabel">0%</span>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <fieldset class="control-box" id="animationControls">
-            <legend>轨迹播放控制器</legend>
-            <div class="control-box-body">
-                <button id="btnRewind">⏪</button>
-                <button id="btnPlay">▶️</button>
-                <button id="btnPause">⏸️</button>
-                <button id="btnForward">⏩</button>
-                <div class="progress-row">
-                    <span>进度条：</span>
-                    <input type="range" id="animationTimeProgress" min="0" max="100" value="0">
-                    <span id="progressLabel">0%</span>
-                </div>
-            </div>
-        </fieldset>
-
         <div id="time-filter">
-            <h3>时间选择模式</h3>
+            <h3 class="section-title">时间选择模式</h3>
             <div class="switch-container">
                 <label class="switch">
                     <input type="checkbox" id="dateModeSwitch">
@@ -113,6 +104,19 @@
                 <input type="date" id="single-date" />
             </div>
             <button class="reset-button" id="reset-time">重置起止时间</button>
+
+            <div class="holiday-row">
+                <div class="switch-container" style="margin:0;">
+                    <label class="switch">
+                        <input type="checkbox" id="holidaySwitch">
+                        <span class="slider round"></span>
+                    </label>
+                    <span>节假日识别</span>
+                </div>
+                <div id="holiday-popover" class="popover" style="display:none;">
+                    <div id="holiday-list"></div>
+                </div>
+            </div>
         </div>
 
         <div id="controls" style="display:none;">
