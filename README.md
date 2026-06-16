@@ -107,8 +107,6 @@ Open your browser and go to http://localhost:5000
 | directories    | Required      | List of media file storage paths     |
 
 ## Notes
-❗ Do not expose the API key in `config.json`
-
 ❗ Processing a large number of files for the first time may take a long time (recommended to run in the background)
 
 ❗ Windows systems require ExifTool to be installed separately and added to the PATH
