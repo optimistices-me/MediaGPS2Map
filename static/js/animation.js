@@ -149,13 +149,11 @@ function initAnimation() {
         document.getElementById('progressLabel').textContent = progEl.value + '%';
     });
 
-    document.getElementById('btnReset').addEventListener('click', () => {
+    document.getElementById('btnStop').addEventListener('click', () => {
         isPaused = true;
-        currentAnimationIndex = 0;
-        if (animationPoints.length > 0) {
-            const pt = animationPoints[0];
-            animationMarker.setLatLng([pt.lat, pt.lng]);
-        }
+        stopAnimation();
+        document.getElementById('animationSwitch').checked = false;
+        isAnimationPlaying = false;
         progEl.value = 0;
         document.getElementById('progressLabel').textContent = '0%';
     });

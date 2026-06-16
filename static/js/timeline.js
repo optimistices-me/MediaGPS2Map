@@ -39,7 +39,7 @@ function initTimeRange() {
 }
 
 function getActiveTimeRange() {
-    const isSingleMode = document.getElementById('dateModeSwitch').checked;
+    const isSingleMode = document.getElementById('modeSingle').checked;
     let start, end;
     if (isSingleMode) {
         const dateStr = document.getElementById('single-date').value;
@@ -157,11 +157,24 @@ function initTimeline() {
 
     document.getElementById('single-date').addEventListener('change', updateTimeRange);
 
-    document.getElementById('dateModeSwitch').addEventListener('change', function (e) {
-        const isSingleMode = e.target.checked;
-        document.getElementById('mode-label').textContent = isSingleMode ? '单日模式' : '范围模式';
-        document.getElementById('range-date-picker').style.display = isSingleMode ? 'none' : 'flex';
-        document.getElementById('single-date-picker').style.display = isSingleMode ? 'flex' : 'none';
+    const tabRange = document.querySelector('.date-mode-tabs .speed-tab[for="modeRange"]');
+    const tabSingle = document.querySelector('.date-mode-tabs .speed-tab[for="modeSingle"]');
+
+    document.getElementById('modeRange').addEventListener('change', function () {
+        tabRange.classList.add('active');
+        tabSingle.classList.remove('active');
+        document.getElementById('range-date-picker').style.display = 'flex';
+        document.getElementById('single-date-picker').style.display = 'none';
+        document.getElementById('timeline-container').style.display = 'block';
+        updateTimeRange();
+    });
+
+    document.getElementById('modeSingle').addEventListener('change', function () {
+        tabSingle.classList.add('active');
+        tabRange.classList.remove('active');
+        document.getElementById('single-date-picker').style.display = 'flex';
+        document.getElementById('range-date-picker').style.display = 'none';
+        document.getElementById('timeline-container').style.display = 'none';
         updateTimeRange();
     });
 

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>照片位置热图</title>
+    <title>GPS2Map 照片轨迹地图</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/map.css') }}" />
 </head>
@@ -14,27 +14,73 @@
     </div>
 
     <div id="sidebar">
-        <h1 class="app-title">GPS2Map 照片轨迹地图</h1>
+        <div class="resize-handle" id="resizeHandle"></div>
 
-        <div>
-            <div class="mode-toggle">
-                <span class="mode-label">轨迹模式</span>
-                <label class="switch">
-                    <input type="checkbox" id="displayModeSwitch">
-                    <span class="slider round"></span>
-                </label>
-                <span class="mode-label">热点图模式</span>
+        <h1 class="app-title">GPS2Map</h1>
+        <div class="sidebar-subtitle">照片轨迹地图</div>
+
+        <div class="mode-toggle">
+            <span class="mode-label active" data-mode="heatmap">🔥 热点图</span>
+            <label class="switch">
+                <input type="checkbox" id="displayModeSwitch">
+                <span class="slider round"></span>
+            </label>
+            <span class="mode-label" data-mode="trajectory">🛤 轨迹</span>
+        </div>
+
+        <!-- 统计信息 -->
+        <div class="glass-card">
+            <h3 class="card-title">统计信息</h3>
+            <div class="stat-row">
+                <span>文件数量</span>
+                <span class="stat-value" id="file-count">0</span>
             </div>
-
-            <h3 class="section-title">统计信息</h3>
-            <p>文件数量: <span id="file-count">0</span></p>
-            <p>时间范围: <span id="time-range">无</span></p>
-            <p>常去位置:</p>
+            <div class="stat-row">
+                <span>时间范围</span>
+                <span class="stat-value" id="time-range">无</span>
+            </div>
+            <div style="margin-top:6px;font-size:0.82em;color:#6b7280;">常去位置</div>
             <div id="freq-locations-box">
                 <ul id="sample-locations"></ul>
             </div>
+        </div>
 
-            <div class="switch-container">
+        <!-- 时间选择 -->
+        <div class="glass-card">
+            <h3 class="card-title">时间选择</h3>
+            <div class="date-mode-tabs">
+                <input type="radio" name="dateMode" id="modeRange" checked hidden>
+                <label class="speed-tab active" for="modeRange">范围模式</label>
+                <input type="radio" name="dateMode" id="modeSingle" hidden>
+                <label class="speed-tab" for="modeSingle">单日模式</label>
+            </div>
+            <div id="timeline-container" class="range-mode">
+                <div id="timeline"></div>
+                <div id="timeline-handle-start"></div>
+                <div id="timeline-handle-end"></div>
+            </div>
+            <div class="time-input" id="range-date-picker">
+                <input type="datetime-local" id="start-time" />
+                <input type="datetime-local" id="end-time" />
+                <button class="icon-btn" id="reset-time" title="重置起止时间">↺</button>
+            </div>
+            <div class="time-input" id="single-date-picker" style="display:none;">
+                <input type="date" id="single-date" />
+                <button class="icon-btn" id="reset-time-single" title="重置日期">↺</button>
+            </div>
+
+            <div class="holiday-row">
+                <button id="holidayBtn" class="holiday-toggle-btn">节假日识别</button>
+                <div id="holiday-popover" class="popover" style="display:none;">
+                    <div id="holiday-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 轨迹控制 -->
+        <div class="glass-card" id="trajectory-card" style="display:none;">
+            <h3 class="card-title">轨迹控制</h3>
+            <div class="switch-container" style="margin-top:0;">
                 <label class="switch">
                     <input type="checkbox" id="lockTrackSwitch">
                     <span class="slider round"></span>
@@ -50,111 +96,82 @@
                 <span>显示轨迹移动</span>
             </div>
 
-            <div class="section-box">
-                <h3 class="section-title">轨迹控制</h3>
-                <div class="speed-box">
-                    <div class="speed-label">移动速度</div>
-                    <div class="speed-tabs">
-                        <input type="radio" name="speedMode" id="modeFPS" hidden>
-                        <label class="speed-tab" for="modeFPS">照片/秒</label>
-                        <input type="radio" name="speedMode" id="modeRatio" checked hidden>
-                        <label class="speed-tab active" for="modeRatio">压缩比</label>
-                    </div>
-                    <div class="speed-panel" id="speed-fps" style="display:none;">
-                        <input type="range" id="animationSpeed" min="1" max="50" value="5">
-                        <input type="number" id="animationSpeed-value" value="5" min="1" max="50"> 照片/秒
-                    </div>
-                    <div class="speed-panel" id="speed-ratio">
-                        <input type="number" id="animationRatio" value="3600" min="1"> 秒/动画秒
-                    </div>
+            <div class="speed-box">
+                <div class="speed-label">移动速度</div>
+                <div class="speed-tabs">
+                    <input type="radio" name="speedMode" id="modeRatio" checked hidden>
+                    <label class="speed-tab active" for="modeRatio">压缩比</label>
+                    <input type="radio" name="speedMode" id="modeFPS" hidden>
+                    <label class="speed-tab" for="modeFPS">照片/秒</label>
                 </div>
+                <div class="speed-panel" id="speed-ratio">
+                    <input type="number" id="animationRatio" value="3600" min="1">
+                    <span style="font-size:0.8em;color:#6b7280;">秒/动画秒</span>
+                </div>
+                <div class="speed-panel" id="speed-fps" style="display:none;">
+                    <input type="range" id="animationSpeed" min="1" max="50" value="5">
+                    <input type="number" id="animationSpeed-value" value="5" min="1" max="50">
+                    <span style="font-size:0.8em;color:#6b7280;">张/秒</span>
+                </div>
+            </div>
 
-                <div class="control-box-body" style="margin-top:8px;">
-                    <button id="btnRewind" title="快退">⏪</button>
-                    <button id="btnPlay" title="播放">▶️</button>
-                    <button id="btnPause" title="暂停">⏸️</button>
-                    <button id="btnForward" title="快进">⏩</button>
-                    <button id="btnReset" title="重置">⏮️</button>
-                    <div class="progress-row">
-                        <div class="progress-label-row">进度条：</div>
-                        <input type="range" id="animationTimeProgress" min="0" max="100" value="0">
-                        <span id="progressLabel">0%</span>
-                    </div>
-                </div>
+            <div class="playback-btns">
+                <button id="btnRewind" title="快退">⏪</button>
+                <button id="btnPlay" title="播放">▶️</button>
+                <button id="btnPause" title="暂停">⏸️</button>
+                <button id="btnForward" title="快进">⏩</button>
+                <button id="btnStop" title="停止">⏹️</button>
+            </div>
+            <div class="progress-label-row">进度条</div>
+            <div class="progress-row">
+                <input type="range" id="animationTimeProgress" min="0" max="100" value="0">
+                <span id="progressLabel">0%</span>
             </div>
         </div>
 
-        <div class="section-box" id="time-filter">
-            <h3 class="section-title">时间选择模式</h3>
-            <div class="switch-container">
-                <label class="switch">
-                    <input type="checkbox" id="dateModeSwitch">
-                    <span class="slider round"></span>
-                </label>
-                <span id="mode-label">范围模式</span>
+        <!-- 热点形状控制 -->
+        <div class="glass-card" id="controls">
+            <h3 class="card-title">热点形状</h3>
+            <div class="param-row">
+                <label>半径</label>
+                <input type="range" id="radius" min="1" max="50" value="4">
+                <input type="number" id="radius-value" value="4">
             </div>
-            <div id="timeline-container" class="range-mode">
-                <div id="timeline"></div>
-                <div id="timeline-handle-start"></div>
-                <div id="timeline-handle-end"></div>
+            <div class="param-row">
+                <label>模糊</label>
+                <input type="range" id="blur" min="0" max="10" value="2">
+                <input type="number" id="blur-value" value="2">
             </div>
-            <div class="time-input" id="range-date-picker">
-                <input type="datetime-local" id="start-time" />
-                <input type="datetime-local" id="end-time" />
-                <button class="icon-btn" id="reset-time" title="重置起止时间">↺</button>
+            <div class="param-row">
+                <label>最低不透明度</label>
+                <input type="range" id="minOpacity" min="0" max="1" step="0.01" value="0.4">
+                <input type="number" id="minOpacity-value" value="0.4" step="0.01">
             </div>
-            <div class="time-input" id="single-date-picker" style="display: none;">
-                <input type="date" id="single-date" />
-                <button class="icon-btn" id="reset-time-single" title="重置日期">↺</button>
+            <div style="margin-top:10px;font-size:0.8em;color:#6b7280;font-weight:500;">渐变色</div>
+            <div class="gradient-color">
+                <span>低值颜色</span>
+                <input type="color" id="lowColor" value="#0000ff">
+                <input type="number" id="lowOpacity" value="0.9" min="0" max="1" step="0.01">
             </div>
-
-            <div class="holiday-row">
-                <button id="holidayBtn" class="holiday-toggle-btn">节假日识别</button>
-                <div id="holiday-popover" class="popover" style="display:none;">
-                    <div id="holiday-list"></div>
-                </div>
+            <div class="gradient-color">
+                <span>中间颜色</span>
+                <input type="color" id="midColor" value="#ffff00">
+                <input type="number" id="midOpacity" value="0.6" min="0" max="1" step="0.01">
+            </div>
+            <div class="gradient-color">
+                <span>高值颜色</span>
+                <input type="color" id="highColor" value="#ff0000">
+                <input type="number" id="highOpacity" value="0.2" min="0" max="1" step="0.01">
             </div>
         </div>
 
-        <div id="controls" style="display:none;">
-            <h3 class="control-box-title">热点形状控制</h3>
-            <p>Radius:
-                <input type="range" id="radius" min="1" max="50" value="4" />
-                <input type="number" id="radius-value" value="4" />
-            </p>
-
-            <p>Blur:
-                <input type="range" id="blur" min="0" max="10" value="2" />
-                <input type="number" id="blur-value" value="2" />
-            </p>
-
-            <p>Min Opacity:
-                <input type="range" id="minOpacity" min="0" max="1" step="0.01" value="0.4" />
-                <input type="number" id="minOpacity-value" value="0.4" step="0.01" />
-            </p>
-
-            <p>Gradient:
-                <div class="gradient-color">
-                    <label>Low Color:
-                        <input type="color" id="lowColor" value="#0000ff" />
-                        <input type="number" id="lowOpacity" value="0.9" min="0" max="1" step="0.01" />
-                    </label>
-                </div>
-
-                <div class="gradient-color">
-                    <label>Mid Color:
-                        <input type="color" id="midColor" value="#ffff00" />
-                        <input type="number" id="midOpacity" value="0.6" min="0" max="1" step="0.01" />
-                    </label>
-                </div>
-
-                <div class="gradient-color">
-                    <label>High Color:
-                        <input type="color" id="highColor" value="#ff0000" />
-                        <input type="number" id="highOpacity" value="0.2" min="0" max="1" step="0.01" />
-                    </label>
-                </div>
-            </p>
+        <div class="map-source-row">
+            <div class="speed-tabs map-source-tabs">
+                <input type="radio" name="mapSource" id="mapOSM" checked hidden>
+                <label class="speed-tab active" for="mapOSM">OSM</label>
+                <input type="radio" name="mapSource" id="mapAmap" hidden>
+                <label class="speed-tab" for="mapAmap">高德地图</label>
+            </div>
         </div>
     </div>
 

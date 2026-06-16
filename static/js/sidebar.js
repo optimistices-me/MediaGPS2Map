@@ -115,15 +115,6 @@ function initSidebar() {
         isTrackLocked = e.target.checked;
     });
 
-    document.getElementById('animationSwitch').addEventListener('change', function (e) {
-        isAnimationPlaying = e.target.checked;
-        if (isAnimationPlaying) {
-            startAnimation();
-        } else {
-            stopAnimation();
-        }
-    });
-
     document.getElementById('animationSpeed').addEventListener('input', function (e) {
         document.getElementById('animationSpeed-value').value = e.target.value;
         if (isAnimationPlaying) {
@@ -157,5 +148,17 @@ function initSidebar() {
         tabFps.classList.remove('active');
         panelRatio.style.display = 'flex';
         panelFps.style.display = 'none';
+    });
+
+    document.getElementById('animationSwitch').addEventListener('change', function (e) {
+        if (e.target.checked && showMode !== 'trajectory') {
+            setDisplayMode('trajectory');
+        }
+        isAnimationPlaying = e.target.checked;
+        if (isAnimationPlaying) {
+            startAnimation();
+        } else {
+            stopAnimation();
+        }
     });
 }

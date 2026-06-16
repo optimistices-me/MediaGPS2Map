@@ -1,6 +1,8 @@
 let currentPoints = [];
 let debounceTimeout = null;
 let map;
+let osmLayer = null;
+let amapLayer = null;
 
 function aggregatePoints(points, gridSize) {
     const aggregated = {};
@@ -39,7 +41,11 @@ function loadDataForBounds(bounds, shouldUpdateTimeRange) {
 }
 
 map = L.map('map').setView([30, 120], 3);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+amapLayer = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+    subdomains: ['1', '2', '3', '4'],
+    maxZoom: 18
+});
 
 map.on('moveend', function () {
     if (debounceTimeout) {
@@ -106,15 +112,72 @@ initAnimation();
 initSidebar();
 initHoliday();
 
-document.getElementById('displayModeSwitch').addEventListener('change', function (e) {
-    showMode = e.target.checked ? 'heatmap' : 'trajectory';
-    const labels = document.querySelectorAll('.mode-toggle .mode-label');
-    labels[0].style.fontWeight = showMode === 'trajectory' ? 'bold' : 'normal';
-    labels[1].style.fontWeight = showMode === 'heatmap' ? 'bold' : 'normal';
-    document.getElementById('controls').style.display = showMode === 'heatmap' ? 'block' : 'none';
+const modeLabels = document.querySelectorAll('.mode-toggle .mode-label');
+const modeSwitch = document.getElementById('displayModeSwitch');
+
+function setDisplayMode(mode) {
+    showMode = mode;
+    modeSwitch.checked = (mode === 'heatmap');
+    modeLabels.forEach(l => l.classList.toggle('active', l.dataset.mode === mode));
+    document.getElementById('trajectory-card').style.display = mode === 'trajectory' ? 'block' : 'none';
     renderTracks(currentPoints);
+}
+
+modeLabels.forEach(label => {
+    label.addEventListener('click', function () {
+        setDisplayMode(this.dataset.mode);
+    });
 });
-document.querySelectorAll('.mode-toggle .mode-label')[0].style.fontWeight = 'bold';
+
+setDisplayMode('heatmap');
+
+const tabOsm = document.querySelector('.map-source-tabs .speed-tab[for="mapOSM"]');
+const tabAmap = document.querySelector('.map-source-tabs .speed-tab[for="mapAmap"]');
+
+document.getElementById('mapOSM').addEventListener('change', function () {
+    tabOsm.classList.add('active');
+    tabAmap.classList.remove('active');
+    map.removeLayer(amapLayer);
+    map.addLayer(osmLayer);
+});
+
+document.getElementById('mapAmap').addEventListener('change', function () {
+    tabAmap.classList.add('active');
+    tabOsm.classList.remove('active');
+    map.removeLayer(osmLayer);
+    map.addLayer(amapLayer);
+});
+
+const sb = document.getElementById('sidebar');
+const handle = document.getElementById('resizeHandle');
+let resizing = false;
+let startX, startWidth;
+
+handle.addEventListener('mousedown', function (e) {
+    resizing = true;
+    startX = e.clientX;
+    startWidth = sb.offsetWidth;
+    handle.classList.add('active');
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'ew-resize';
+    e.preventDefault();
+});
+
+document.addEventListener('mousemove', function (e) {
+    if (!resizing) return;
+    const delta = startX - e.clientX;
+    const newWidth = startWidth + delta;
+    sb.style.width = Math.min(520, Math.max(280, newWidth)) + 'px';
+});
+
+document.addEventListener('mouseup', function () {
+    if (!resizing) return;
+    resizing = false;
+    handle.classList.remove('active');
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    map.invalidateSize();
+});
 
 const initialBounds = map.getBounds();
 loadDataForBounds(initialBounds, true);
