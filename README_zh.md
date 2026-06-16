@@ -110,8 +110,6 @@ python app_hdd.py --skip-db
 | batch_size   | 500 | 文件处理批次大小（机械硬盘建议200-500） |
 | AMAP_API_KEY | 必填  | 高德地图Web服务API密钥          |
 |directories| 必填| 媒体文件存储路径列表              |
-## 注意事项
-❗ 请勿公开config.json中的API密钥
 
 ❗ 首次处理大量文件可能需要较长时间（建议后台运行）
 
