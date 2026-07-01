@@ -70,7 +70,8 @@ function refreshAllLayers(points) {
 function refreshSidebarData(points) {
     updateSidebar({
         points: points,
-        addresses: []
+        addresses: [],
+        total_count: currentPoints.length
     });
 }
 
@@ -89,7 +90,8 @@ function updateTimeRange() {
     const params = new URLSearchParams({
         bounds: `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`,
         start: range.start,
-        end: range.end
+        end: range.end,
+        zoom: map.getZoom()
     });
 
     const fetchPromise = fetch(`/data?${params}`)

@@ -25,8 +25,9 @@ def _get_chinese_holidays_by_year(year):
     return holiday_periods
 
 
-def detect_holiday_periods():
-    daily_counts = get_daily_counts()
+def detect_holiday_periods(daily_counts=None):
+    if daily_counts is None:
+        daily_counts = get_daily_counts()
     if not daily_counts:
         return []
 

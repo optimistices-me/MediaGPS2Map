@@ -2,12 +2,14 @@ import sqlite3
 import os
 
 DB_PATH = 'geo_data.db'
+_max_points = 5000
 
 
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.execute('PRAGMA journal_mode = WAL')
     conn.execute('PRAGMA synchronous = NORMAL')
+    conn.execute('PRAGMA cache_size = -8000')
     return conn
 
 
@@ -36,11 +38,10 @@ def count_records():
     return count
 
 
-def get_points(bounds=None, start_time=None, end_time=None):
+def get_data(bounds=None, start_time=None, end_time=None, skip_simplify=False):
     conn = get_connection()
     c = conn.cursor()
 
-    query = '''SELECT path, lat, lon, altitude, timestamp FROM media'''
     conditions = []
     params = []
 
@@ -53,11 +54,20 @@ def get_points(bounds=None, start_time=None, end_time=None):
         conditions.append('(timestamp BETWEEN ? AND ?)')
         params += [start_time, end_time]
 
+    where_clause = ''
     if conditions:
-        query += ' WHERE ' + ' AND '.join(conditions)
-    query += ' ORDER BY timestamp ASC'
+        where_clause = ' WHERE ' + ' AND '.join(conditions)
 
+    query = f'SELECT path, lat, lon, altitude, timestamp FROM media{where_clause} ORDER BY timestamp ASC'
     c.execute(query, params)
+    rows = c.fetchall()
+
+    total_count = len(rows)
+
+    if not skip_simplify and total_count > _max_points:
+        step = max(1, total_count // _max_points)
+        rows = rows[::step]
+
     points = [{
         'path': row[0],
         'lat': row[1],
@@ -65,44 +75,18 @@ def get_points(bounds=None, start_time=None, end_time=None):
         'altitude': row[3],
         'timestamp': row[4],
         'sort_time': row[4]
-    } for row in c.fetchall()]
+    } for row in rows]
 
-    conn.close()
-    return points
-
-
-def get_top_grids(bounds=None, start_time=None, end_time=None):
-    conn = get_connection()
-    c = conn.cursor()
-
-    conditions = []
-    params = []
-
-    if bounds:
-        lat1, lng1, lat2, lng2 = map(float, bounds.split(','))
-        conditions.append('(lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?)')
-        params += [min(lat1, lat2), max(lat1, lat2), min(lng1, lng2), max(lng1, lng2)]
-
-    if start_time and end_time:
-        conditions.append('(timestamp BETWEEN ? AND ?)')
-        params += [start_time, end_time]
-
-    query = '''
-    SELECT ROUND(lat, 1) as lat_grid,
-        ROUND(lon, 1) as lon_grid,
-        COUNT(*) as count
-    FROM media
+    grid_query = f'''
+        SELECT ROUND(lat, 1) as lat_grid,
+            ROUND(lon, 1) as lon_grid,
+            COUNT(*) as count
+        FROM media{where_clause}
+        GROUP BY lat_grid, lon_grid
+        ORDER BY count DESC
+        LIMIT 5
     '''
-    if conditions:
-        query += ' WHERE ' + ' AND '.join(conditions)
-
-    query += '''
-    GROUP BY lat_grid, lon_grid
-    ORDER BY count DESC
-    LIMIT 5
-    '''
-
-    c.execute(query, params)
+    c.execute(grid_query, params)
     top_grids = c.fetchall()
 
     addresses = [{
@@ -112,7 +96,7 @@ def get_top_grids(bounds=None, start_time=None, end_time=None):
     } for row in top_grids]
 
     conn.close()
-    return addresses
+    return points, addresses, total_count
 
 
 def get_modified_time(path):

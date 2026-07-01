@@ -1,11 +1,35 @@
 import math
+import json
+import os
 import requests
 from config import load_config
 
 config = load_config()
 AMAP_API_KEY = config['AMAP_API_KEY']
 
+CACHE_FILE = 'address_cache.json'
 address_cache = {}
+
+
+def _load_cache():
+    global address_cache
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, 'r', encoding='utf-8') as f:
+                address_cache = json.load(f)
+        except Exception:
+            pass
+
+
+def _save_cache():
+    try:
+        with open(CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(address_cache, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+_load_cache()
 
 
 def wgs84_to_gcj02(lat, lng):
@@ -37,6 +61,30 @@ def wgs84_to_gcj02(lat, lng):
     gcj_lat = lat + d_lat
     gcj_lng = lng + d_lng
     return gcj_lat, gcj_lng
+
+
+def get_cached_address(lng, lat):
+    cache_key = f"{float(lat):.4f},{float(lng):.4f}"
+    if cache_key in address_cache:
+        return address_cache[cache_key]
+
+    gcj_lat, gcj_lng = wgs84_to_gcj02(float(lat), float(lng))
+    url = f'https://restapi.amap.com/v3/geocode/regeo?key={AMAP_API_KEY}&location={gcj_lng},{gcj_lat}'
+    try:
+        response = requests.get(url, timeout=3)
+        response.raise_for_status()
+        data = response.json()
+
+        if data.get('status') == '1' and data.get('regeocode'):
+            result = data['regeocode']
+            address_cache[cache_key] = result
+            if len(address_cache) % 20 == 0:
+                _save_cache()
+            return result
+    except Exception as e:
+        print(f"地址查询失败: {e}")
+
+    return None
 
 
 def get_address(lat, lng):

@@ -1,5 +1,10 @@
 let isTrackLocked = false;
 let freqLocationsTimeout = null;
+const addressCache = new Map();
+
+function getAddressKey(lat, lng) {
+    return `${lat.toFixed(3)},${lng.toFixed(3)}`;
+}
 
 function updateSidebar(data) {
     if (freqLocationsTimeout) {
@@ -7,7 +12,7 @@ function updateSidebar(data) {
     }
     freqLocationsTimeout = setTimeout(() => {
         const points = data.points;
-        const fileCount = points.length;
+        const fileCount = data.total_count !== undefined ? data.total_count : points.length;
         const timestamps = points.map(p => new Date(p.timestamp).getTime());
         let minTimestamp = Infinity;
         let maxTimestamp = -Infinity;
@@ -70,6 +75,11 @@ function analyzeFrequentLocations(points) {
 
     Promise.all(topLocations.map(async (location, index) => {
         try {
+            const cacheKey = getAddressKey(location.lat, location.lng);
+            if (addressCache.has(cacheKey)) {
+                return { ...addressCache.get(cacheKey), index };
+            }
+
             const [gcjLat, gcjLng] = wgs84ToGcj02(location.lat, location.lng);
             const response = await fetch(`/api/regeo?lng=${gcjLng}&lat=${gcjLat}`);
             const data = await response.json();
@@ -83,11 +93,13 @@ function analyzeFrequentLocations(points) {
                 }
             }
 
-            return {
-                address: address,
-                count: location.count,
-                index: index
-            };
+            const result = { address, count: location.count };
+            addressCache.set(cacheKey, result);
+            if (addressCache.size > 200) {
+                const firstKey = addressCache.keys().next().value;
+                addressCache.delete(firstKey);
+            }
+            return { ...result, index };
         } catch (error) {
             console.error('地址查询失败:', error);
             return {

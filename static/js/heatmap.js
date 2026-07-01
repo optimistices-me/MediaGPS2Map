@@ -18,17 +18,17 @@ function hexToRgb(hex) {
 }
 
 function updateHeatmapWithCurrentParams(points) {
-    if (heatmapLayer) {
-        map.removeLayer(heatmapLayer);
-    }
-
     const pts = (points || currentPoints).map(p => [p.lat, p.lng, 1]);
-    heatmapLayer = L.heatLayer(pts, {
-        radius: currentHeatmapParams.radius,
-        blur: currentHeatmapParams.blur,
-        minOpacity: currentHeatmapParams.minOpacity,
-        gradient: currentHeatmapParams.gradient
-    }).addTo(map);
+    if (heatmapLayer) {
+        heatmapLayer.setLatLngs(pts);
+    } else {
+        heatmapLayer = L.heatLayer(pts, {
+            radius: currentHeatmapParams.radius,
+            blur: currentHeatmapParams.blur,
+            minOpacity: currentHeatmapParams.minOpacity,
+            gradient: currentHeatmapParams.gradient
+        }).addTo(map);
+    }
 }
 
 function updateHeatmap() {
@@ -43,7 +43,18 @@ function updateHeatmap() {
         }
     };
 
-    updateHeatmapWithCurrentParams();
+    const pts = currentPoints.map(p => [p.lat, p.lng, 1]);
+    if (heatmapLayer) {
+        heatmapLayer.setLatLngs(pts);
+        heatmapLayer.setOptions({
+            radius: currentHeatmapParams.radius,
+            blur: currentHeatmapParams.blur,
+            minOpacity: currentHeatmapParams.minOpacity,
+            gradient: currentHeatmapParams.gradient
+        });
+    } else {
+        updateHeatmapWithCurrentParams();
+    }
 }
 
 function updateHeatmapFromInput(event) {

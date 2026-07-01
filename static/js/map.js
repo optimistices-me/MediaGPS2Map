@@ -25,7 +25,8 @@ function loadDataForBounds(bounds, shouldUpdateTimeRange) {
     const params = new URLSearchParams({
         bounds: `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`,
         start: document.getElementById('start-time').value,
-        end: document.getElementById('end-time').value
+        end: document.getElementById('end-time').value,
+        zoom: map.getZoom()
     });
 
     fetch(`/data?${params}`)
