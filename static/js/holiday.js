@@ -1,65 +1,64 @@
-function initHoliday() {
-    document.getElementById('holidayBtn').addEventListener('click', function () {
-        const popover = document.getElementById('holiday-popover');
-        if (popover.style.display === 'block') {
-            popover.style.display = 'none';
-        } else {
-            loadHolidayData();
-            popover.style.display = 'block';
-        }
-    });
+/**
+ * Holiday detection popover — fetches /api/holidays and renders clickable buttons.
+ * @module holiday
+ */
 
-    document.addEventListener('click', function (e) {
-        const popover = document.getElementById('holiday-popover');
-        const btn = document.getElementById('holidayBtn');
-        if (popover.style.display === 'block' && !popover.contains(e.target) && e.target !== btn) {
-            popover.style.display = 'none';
-        }
-    });
+import { updateTimeRange } from './timeline.js';
+import { startAnimation } from './animation.js';
+
+/** Bind holiday button. */
+export function initHoliday() {
+  document.getElementById('holidayBtn').addEventListener('click', () => {
+    const popover = document.getElementById('holiday-popover');
+    if (popover.style.display === 'block') {
+      popover.style.display = 'none';
+    } else {
+      loadHolidayData();
+      popover.style.display = 'block';
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    const popover = document.getElementById('holiday-popover');
+    const btn = document.getElementById('holidayBtn');
+    if (popover.style.display === 'block' && !popover.contains(e.target) && e.target !== btn) {
+      popover.style.display = 'none';
+    }
+  });
 }
 
-function loadHolidayData() {
-    const listEl = document.getElementById('holiday-list');
-    listEl.innerHTML = '<div style="padding:5px;color:#666;">正在加载节假日数据...</div>';
+async function loadHolidayData() {
+  const listEl = document.getElementById('holiday-list');
+  listEl.innerHTML = '<div style="padding:5px;color:#666;">正在加载…</div>';
 
-    fetch('/api/holidays')
-        .then(response => response.json())
-        .then(data => {
-            const holidays = data.holidays || [];
-            if (holidays.length === 0) {
-                listEl.innerHTML = '<div style="padding:5px;color:#666;">未检测到节假日轨迹</div>';
-                return;
-            }
+  try {
+    const resp = await fetch('/api/holidays');
+    const data = await resp.json();
+    const holidays = data.holidays || [];
 
-            listEl.innerHTML = '';
-            holidays.forEach(h => {
-                const btn = document.createElement('button');
-                btn.className = 'holiday-btn';
-                btn.textContent = `${h.name}: ${h.start} ~ ${h.end} (${h.photo_count}张)`;
-                btn.title = `官方假期: ${h.official_start} ~ ${h.official_end}`;
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    document.getElementById('start-time').value = h.start + 'T00:00';
-                    document.getElementById('end-time').value = h.end + 'T23:59';
+    if (!holidays.length) {
+      listEl.innerHTML = '<div style="padding:5px;color:#666;">未检测到节假日轨迹</div>';
+      return;
+    }
 
-                    const handleStart = document.getElementById('timeline-handle-start');
-                    const handleEnd = document.getElementById('timeline-handle-end');
-                    handleStart.style.left = '0%';
-                    handleEnd.style.left = '100%';
-
-                    updateTimeRange().then(() => {
-                        document.getElementById('animationSwitch').checked = true;
-                        isAnimationPlaying = true;
-                        startAnimation();
-                    });
-
-                    document.getElementById('holiday-popover').style.display = 'none';
-                });
-                listEl.appendChild(btn);
-            });
-        })
-        .catch(error => {
-            console.error('节假日数据加载失败:', error);
-            listEl.innerHTML = '<div style="padding:5px;color:#c00;">加载失败，请重试</div>';
-        });
+    listEl.innerHTML = '';
+    holidays.forEach((h) => {
+      const btn = document.createElement('button');
+      btn.className = 'holiday-btn';
+      btn.textContent = `${h.name}: ${h.start} ~ ${h.end} (${h.photo_count}张)`;
+      btn.title = `官方假期: ${h.official_start} ~ ${h.official_end}`;
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        document.getElementById('start-time').value = h.start + 'T00:00';
+        document.getElementById('end-time').value = h.end + 'T23:59';
+        document.getElementById('holiday-popover').style.display = 'none';
+        await updateTimeRange();
+        document.getElementById('animationSwitch').checked = true;
+        // Will be handled by switch change event
+      });
+      listEl.appendChild(btn);
+    });
+  } catch (err) {
+    listEl.innerHTML = '<div style="padding:5px;color:#c00;">加载失败</div>';
+  }
 }

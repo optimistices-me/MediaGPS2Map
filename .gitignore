@@ -1,0 +1,36 @@
+# OS & IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Project
+config.json
+geo_data.db
+address_cache.json
+history_db/
+
+# Logs & SQLite journal
+*.db-shm
+*.db-wal
+*.log
+
+# MCP tool outputs
+.playwright-mcp/
+
+# Project docs (not part of source code)
+CLAUDE.md
+/test*/
+/t*/
+*.bak
+*.txt.txt

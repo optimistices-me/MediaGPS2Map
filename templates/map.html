@@ -175,17 +175,12 @@
         </div>
     </div>
 
+    <!-- Vendored libraries (loaded via CDN; local copies in static/js/lib/) -->
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <script src="https://unpkg.com/leaflet-arrowheads@1.3.1/src/leaflet-arrowheads.js"></script>
 
-    <script src="{{ url_for('static', filename='js/geo_utils.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/heatmap.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/tracks.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/timeline.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/animation.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/holiday.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/map.js') }}"></script>
+    <!-- Application modules (ES modules — runs deferred) -->
+    <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

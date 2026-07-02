@@ -1,0 +1,5 @@
+flask>=2.0
+flask-cors
+flask-compress
+requests>=2.28
+chinese-calendar>=1.6  # optional: holiday detection
